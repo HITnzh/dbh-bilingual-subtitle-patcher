@@ -14,6 +14,7 @@ Implemented:
 - `patch --dry-run`: produce a local patch plan without writing game files.
 - `restore`: restore files from backups created by this tool.
 - Core merge helpers for bilingual subtitle text.
+- `tools`: inspect external DBH helper tools and print example extractor/packer commands.
 
 Not implemented yet:
 
@@ -31,12 +32,37 @@ $env:PYTHONPATH = "src"
 python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub patch --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
 python -m dbh_bisub restore --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
+python -m dbh_bisub tools --examples --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 ```
 
 JSON output is available for automation:
 
 ```powershell
 python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --json
+```
+
+## External Tools
+
+The patcher keeps DBH archive tooling behind an adapter layer. The first supported tool targets are:
+
+- [`dbh-file-parser`](https://github.com/detroitbecometext/dbh-file-parser), for extracting DBH translation data from local game files.
+- [`IDX-Detroit`](https://github.com/systemsiteseason/IDX-Detroit), for extracting and repacking `BigFile_PC.idx` archive data.
+
+Check whether tools are discoverable on `PATH`:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m dbh_bisub tools
+```
+
+Or point to local executable paths explicitly:
+
+```powershell
+python -m dbh_bisub tools `
+  --file-parser "C:\Tools\FileParser.exe" `
+  --idx-detroit "C:\Tools\IDX_Detroit.exe" `
+  --examples `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 ```
 
 ## Development
