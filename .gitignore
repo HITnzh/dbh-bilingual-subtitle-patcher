@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.venv/
+venv/
+*.log
+
+# Local game fixtures and generated patch artifacts
+fixtures/game/
+*.bak
+.dbh-bisub-backups/
