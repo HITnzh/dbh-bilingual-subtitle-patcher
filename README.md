@@ -23,6 +23,7 @@ Implemented:
 - `prepare`: create a local patch work directory without writing game files.
 - `inject-catalog`: inject the bilingual catalog into a target JSON catalog while preserving its shape.
 - `patch-inject`: inject the staged bilingual catalog from a prepared work directory.
+- `patch-package`: package generated patch files and write an audited repack plan.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 - `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
@@ -56,6 +57,7 @@ python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint
 python -m dbh_bisub prepare --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --catalog ".\work\bilingual.json" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe"
 python -m dbh_bisub inject-catalog --source ".\work\patch\catalog\bilingual.json" --target ".\work\patch\extracted\ChineseTraditional.json" --output ".\work\patch\generated\ChineseTraditional.json" --report ".\work\patch\reports\inject-report.json"
 python -m dbh_bisub patch-inject --work-dir ".\work\patch" --result ".\work\patch\reports\patch-inject-result.json"
+python -m dbh_bisub patch-package --work-dir ".\work\patch" --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-package-result.json"
 ```
 
 JSON output is available for automation:
@@ -304,3 +306,15 @@ python -m dbh_bisub patch-inject `
 ```
 
 `patch-inject` reads `catalog/bilingual.json`, auto-selects the single discovered Chinese catalog under `extracted/`, writes the patched catalog under `generated/`, and writes `reports/inject-report.json`. Pass `--target` when more than one Chinese catalog is present.
+
+Package generated patch files before any repack step:
+
+```powershell
+python -m dbh_bisub patch-package `
+  --work-dir ".\work\patch" `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --idx-detroit "C:\Tools\IDX_Detroit.exe" `
+  --result ".\work\patch\reports\patch-package-result.json"
+```
+
+`patch-package` copies files from `generated/` into `package/`, writes `reports/package-manifest.json` with size and SHA-256 metadata, and includes an IDX-Detroit repack dry-run plan when it can resolve `BigFile_PC.idx` and a single `*.FileSizeTable`. Pass `--file-size-table` when the work directory contains more than one table.
