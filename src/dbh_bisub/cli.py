@@ -7,6 +7,7 @@ import sys
 from typing import Any
 
 from .backup_restore import restore_backup
+from .catalog import load_catalog, merge_catalogs, save_catalog, save_report
 from .game_files import GameDirectoryReport, inspect_game_dir
 from .patcher import PatchPlan, build_patch_plan
 from .toolchain import (
@@ -108,6 +109,25 @@ def print_tool_examples(args: argparse.Namespace) -> None:
         print(f"  {format_command(command)}")
 
 
+def print_merge_report(data: dict[str, Any], output: Path, report_path: Path | None) -> None:
+    print(f"Merged entries: {data['merged']}")
+    print(f"English entries: {data['total_english']}")
+    print(f"Chinese entries: {data['total_chinese']}")
+    print(f"Missing English: {data['missing_english']}")
+    print(f"Missing Chinese: {data['missing_chinese']}")
+    print(f"Control token warnings: {data['token_warnings']}")
+    print(f"Output: {output}")
+    if report_path:
+        print(f"Report: {report_path}")
+    if data["issues"]:
+        print("Issues:")
+        for issue in data["issues"][:20]:
+            print(f"  - [{issue['level']}] {issue['key']}: {issue['message']}")
+        if len(data["issues"]) > 20:
+            print(f"  - ... {len(data['issues']) - 20} more")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -144,6 +164,13 @@ def build_parser() -> argparse.ArgumentParser:
     tools.add_argument("--object-count", type=int, default=0, help="IDX-Detroit object count; 0 means all.")
     tools.add_argument("--file-size-table", type=Path, help="FileSizeTable path for repack examples.")
     tools.add_argument("--verbose-example", action="store_true", help="Include FileParser verbose flag in examples.")
+
+    merge = subparsers.add_parser("merge", help="Merge English and Chinese text catalogs into bilingual text.")
+    merge.add_argument("--english", required=True, type=Path, help="English catalog JSON.")
+    merge.add_argument("--chinese", required=True, type=Path, help="Chinese catalog JSON.")
+    merge.add_argument("--output", required=True, type=Path, help="Output bilingual catalog JSON.")
+    merge.add_argument("--report", type=Path, help="Optional JSON merge report path.")
+    merge.add_argument("--json", action="store_true", help="Print machine-readable report JSON.")
 
     return parser
 
@@ -197,6 +224,26 @@ def run_tools(args: argparse.Namespace) -> int:
     return 0 if report.ok else 2
 
 
+def run_merge(args: argparse.Namespace) -> int:
+    try:
+        english = load_catalog(args.english)
+        chinese = load_catalog(args.chinese)
+        result = merge_catalogs(english, chinese)
+        save_catalog(args.output, result.catalog)
+        if args.report:
+            save_report(args.report, result.report)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    report_data = result.report.to_dict()
+    if args.json:
+        print_json(report_data)
+    else:
+        print_merge_report(report_data, args.output, args.report)
+    return 0 if result.report.ok else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -208,5 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_restore(args)
     if args.command == "tools":
         return run_tools(args)
+    if args.command == "merge":
+        return run_merge(args)
     parser.error(f"Unknown command: {args.command}")
     return 2

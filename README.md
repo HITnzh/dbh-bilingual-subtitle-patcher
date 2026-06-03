@@ -15,6 +15,7 @@ Implemented:
 - `restore`: restore files from backups created by this tool.
 - Core merge helpers for bilingual subtitle text.
 - `tools`: inspect external DBH helper tools and print example extractor/packer commands.
+- `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 
 Not implemented yet:
 
@@ -33,6 +34,7 @@ python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit 
 python -m dbh_bisub patch --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
 python -m dbh_bisub restore --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub tools --examples --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
+python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json"
 ```
 
 JSON output is available for automation:
@@ -63,6 +65,40 @@ python -m dbh_bisub tools `
   --idx-detroit "C:\Tools\IDX_Detroit.exe" `
   --examples `
   --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
+```
+
+## Text Catalogs
+
+`merge` accepts a few simple JSON shapes so early experiments are not tied to one extractor format.
+
+Mapping shape:
+
+```json
+{
+  "subtitle_key_1": "Hello",
+  "subtitle_key_2": "Stay where you are."
+}
+```
+
+Entry list shape:
+
+```json
+{
+  "entries": [
+    { "key": "subtitle_key_1", "text": "Hello" },
+    { "key": "subtitle_key_2", "text": "Stay where you are.", "speaker": "Connor" }
+  ]
+}
+```
+
+The output is normalized to:
+
+```json
+{
+  "entries": [
+    { "key": "subtitle_key_1", "text": "Hello\n你好" }
+  ]
+}
 ```
 
 ## Development
