@@ -25,13 +25,15 @@ Implemented:
 - `patch-inject`: inject the staged bilingual catalog from a prepared work directory.
 - `patch-package`: package generated patch files and write an audited repack plan.
 - `patch-stage`: run local backup preflight, catalog injection, packaging, and repack dry-run planning.
+- `patch-materialize`: copy packaged patch files into the local extracted work tree.
+- `patch-repack`: dry-run or explicitly execute IDX-Detroit repack with backup protection.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 - `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
 Not implemented yet:
 
 - DBH extractor/packer integration.
-- Real patch application to `BigFile_PC.idx` / `BigFile_PC.d30`.
+- One-command real patch application to `BigFile_PC.idx` / `BigFile_PC.d30`.
 - Steam version hash allowlist.
 - GUI.
 
@@ -60,6 +62,8 @@ python -m dbh_bisub inject-catalog --source ".\work\patch\catalog\bilingual.json
 python -m dbh_bisub patch-inject --work-dir ".\work\patch" --result ".\work\patch\reports\patch-inject-result.json"
 python -m dbh_bisub patch-package --work-dir ".\work\patch" --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-package-result.json"
 python -m dbh_bisub patch-stage --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --require-repack-plan --result ".\work\patch\reports\patch-stage-result.json"
+python -m dbh_bisub patch-materialize --work-dir ".\work\patch" --result ".\work\patch\reports\patch-materialize-result.json"
+python -m dbh_bisub patch-repack --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-repack-result.json"
 ```
 
 JSON output is available for automation:
@@ -333,3 +337,25 @@ python -m dbh_bisub patch-stage `
 ```
 
 `patch-stage` does not write to the game directory. It checks the backup plan, injects the staged bilingual catalog, packages generated files, and records a repack dry-run plan. If backup preflight or injection fails, it stops before the later local steps.
+
+Materialize the packaged files back into the local extracted tree before repack:
+
+```powershell
+python -m dbh_bisub patch-materialize `
+  --work-dir ".\work\patch" `
+  --result ".\work\patch\reports\patch-materialize-result.json"
+```
+
+`patch-materialize` verifies `reports/package-manifest.json`, checks packaged file SHA-256 hashes, copies each packaged file into the matching path under `extracted/`, and writes `reports/materialize-manifest.json` with original and patched hashes.
+
+Plan the repack step without writing game files:
+
+```powershell
+python -m dbh_bisub patch-repack `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --work-dir ".\work\patch" `
+  --idx-detroit "C:\Tools\IDX_Detroit.exe" `
+  --result ".\work\patch\reports\patch-repack-result.json"
+```
+
+`patch-repack` requires a materialize manifest by default and stays in dry-run mode unless `--execute` is passed. With `--execute`, it first creates a backup of the game files this tool may modify, then runs the IDX-Detroit repack command.
