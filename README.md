@@ -14,6 +14,7 @@ Implemented:
 - `patch --dry-run`: produce a local patch plan without writing game files.
 - `backup`: create a manifest-backed backup of files the patcher may modify.
 - `restore`: restore files from backups created by this tool.
+- `hashes`: create and compare local game file hash manifests.
 - Core merge helpers for bilingual subtitle text.
 - `tools`: inspect external DBH helper tools and print example extractor/packer commands.
 - `idx`: run audited IDX-Detroit extract/repack plans.
@@ -35,6 +36,8 @@ Run from the repository root during development:
 ```powershell
 $env:PYTHONPATH = "src"
 python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
+python -m dbh_bisub hashes snapshot --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --output ".\data\steam-local.hashes.json" --version-id "steam-local"
+python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --hash-manifest ".\data\steam-local.hashes.json"
 python -m dbh_bisub patch --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
 python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
 python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
@@ -195,5 +198,26 @@ git merge feature/project-skeleton
 - Never distribute official game text or generated game archives.
 - Always create a timestamped backup before writing any game file.
 - Use `backup --dry-run` before creating backups in a real install directory.
-- Refuse unknown game file versions by default once version hashes are implemented.
+- Record and verify game file hashes before applying any patch.
 - Keep `patch --dry-run` useful enough to inspect every planned write before applying.
+
+## Hash Manifests
+
+Create a local manifest from a known-clean Steam install:
+
+```powershell
+python -m dbh_bisub hashes snapshot `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --output ".\data\steam-local.hashes.json" `
+  --version-id "steam-local"
+```
+
+Check a game directory against that manifest:
+
+```powershell
+python -m dbh_bisub hashes check `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --manifest ".\data\steam-local.hashes.json"
+```
+
+`BigFile_PC.d30` is excluded by default because this project treats it as the patch archive slot. Pass `--include-patch-archive` only when you intentionally want to record or compare it.

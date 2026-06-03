@@ -11,6 +11,7 @@ from .catalog import load_catalog, merge_catalogs, save_catalog
 from .discovery import discover_catalogs
 from .extractor import plan_extraction, run_extraction
 from .game_files import GameDirectoryReport, inspect_game_dir
+from .hash_manifest import compare_hash_manifest, load_hash_manifest, save_hash_manifest, snapshot_hash_manifest
 from .idx_archive import default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
 from .patcher import PatchPlan, build_patch_plan
 from .quality import (
@@ -53,6 +54,41 @@ def print_verify_report(report: GameDirectoryReport) -> None:
         for error in report.errors:
             print(f"  - {error}")
     print(f"Status: {'ok' if report.ok else 'failed'}")
+
+
+def print_hash_comparison(data: dict[str, Any]) -> None:
+    print(f"Hash manifest: {data['manifest_version_id']}")
+    print(f"Matched files: {len(data['matched'])}")
+    if data["mismatched"]:
+        print("Mismatched files:")
+        for item in data["mismatched"]:
+            print(f"  - {item['name']}")
+    if data["missing"]:
+        print("Missing files:")
+        for name in data["missing"]:
+            print(f"  - {name}")
+    if data["extra"]:
+        print("Extra files:")
+        for name in data["extra"]:
+            print(f"  - {name}")
+    if data["warnings"]:
+        print("Hash warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+    if data["errors"]:
+        print("Hash errors:")
+        for error in data["errors"]:
+            print(f"  - {error}")
+    print(f"Hash status: {'ok' if data['ok'] else 'failed'}")
+
+
+def print_hash_snapshot(data: dict[str, Any], output: Path | None) -> None:
+    print(f"Version id: {data['version_id']}")
+    print(f"Files: {len(data['files'])}")
+    for entry in data["files"]:
+        print(f"  - {entry['name']} ({entry['size']} bytes)")
+    if output:
+        print(f"Output: {output}")
 
 
 def print_patch_plan(plan: PatchPlan) -> None:
@@ -285,6 +321,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_game_dir_argument(verify)
     verify.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     verify.add_argument("--hashes", action="store_true", help="Include SHA-256 hashes for detected game files.")
+    verify.add_argument("--hash-manifest", type=Path, help="Compare game files against a hash manifest JSON.")
 
     patch = subparsers.add_parser("patch", help="Create or apply a patch plan.")
     add_game_dir_argument(patch)
@@ -316,6 +353,21 @@ def build_parser() -> argparse.ArgumentParser:
     tools.add_argument("--object-count", type=int, default=0, help="IDX-Detroit object count; 0 means all.")
     tools.add_argument("--file-size-table", type=Path, help="FileSizeTable path for repack examples.")
     tools.add_argument("--verbose-example", action="store_true", help="Include FileParser verbose flag in examples.")
+
+    hashes = subparsers.add_parser("hashes", help="Create and compare game file hash manifests.")
+    hash_subparsers = hashes.add_subparsers(dest="hash_command", required=True)
+    hash_snapshot = hash_subparsers.add_parser("snapshot", help="Create a hash manifest from a game directory.")
+    add_game_dir_argument(hash_snapshot)
+    hash_snapshot.add_argument("--output", required=True, type=Path, help="Hash manifest JSON to write.")
+    hash_snapshot.add_argument("--version-id", default="local", help="Human-readable version id for this manifest.")
+    hash_snapshot.add_argument("--include-patch-archive", action="store_true", help="Include BigFile_PC.d30 if present.")
+    hash_snapshot.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    hash_check = hash_subparsers.add_parser("check", help="Compare a game directory against a hash manifest.")
+    add_game_dir_argument(hash_check)
+    hash_check.add_argument("--manifest", required=True, type=Path, help="Hash manifest JSON.")
+    hash_check.add_argument("--include-patch-archive", action="store_true", help="Include BigFile_PC.d30 if present.")
+    hash_check.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     idx = subparsers.add_parser("idx", help="Run IDX-Detroit extract/repack commands.")
     idx_subparsers = idx.add_subparsers(dest="idx_command", required=True)
@@ -380,12 +432,29 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_verify(args: argparse.Namespace) -> int:
-    report = inspect_game_dir(args.game_dir, include_hashes=args.hashes)
+    include_hashes = args.hashes or args.hash_manifest is not None
+    report = inspect_game_dir(args.game_dir, include_hashes=include_hashes)
+    hash_report = None
+    if args.hash_manifest:
+        try:
+            manifest = load_hash_manifest(args.hash_manifest)
+            hash_report = compare_hash_manifest(args.game_dir, manifest)
+        except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
     if args.json:
-        print_json(report.to_dict())
+        data = {"ok": report.ok, "game": report.to_dict()}
+        if hash_report:
+            hash_data = hash_report.to_dict()
+            data["hash_manifest"] = hash_data
+            data["ok"] = data["ok"] and hash_data["ok"]
+        print_json(data)
     else:
         print_verify_report(report)
-    return 0 if report.ok else 2
+        if hash_report:
+            print()
+            print_hash_comparison(hash_report.to_dict())
+    return 0 if report.ok and (hash_report is None or hash_report.ok) else 2
 
 
 def run_patch(args: argparse.Namespace) -> int:
@@ -446,6 +515,42 @@ def run_tools(args: argparse.Namespace) -> int:
             print()
             print_tool_examples(args)
     return 0 if report.ok else 2
+
+
+def run_hashes(args: argparse.Namespace) -> int:
+    try:
+        if args.hash_command == "snapshot":
+            manifest = snapshot_hash_manifest(
+                args.game_dir,
+                version_id=args.version_id,
+                include_patch_archive=args.include_patch_archive,
+            )
+            save_hash_manifest(args.output, manifest)
+            data = manifest.to_dict()
+            if args.json:
+                print_json(data)
+            else:
+                print_hash_snapshot(data, args.output)
+            return 0
+        if args.hash_command == "check":
+            manifest = load_hash_manifest(args.manifest)
+            report = compare_hash_manifest(
+                args.game_dir,
+                manifest,
+                include_patch_archive=args.include_patch_archive,
+            )
+            data = report.to_dict()
+            if args.json:
+                print_json(data)
+            else:
+                print_hash_comparison(data)
+            return 0 if report.ok else 2
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"Error: unknown hashes command: {args.hash_command}", file=sys.stderr)
+    return 2
 
 
 def run_discover(args: argparse.Namespace) -> int:
@@ -576,6 +681,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_restore(args)
     if args.command == "tools":
         return run_tools(args)
+    if args.command == "hashes":
+        return run_hashes(args)
     if args.command == "idx":
         return run_idx(args)
     if args.command == "extract":
