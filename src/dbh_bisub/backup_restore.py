@@ -8,7 +8,9 @@ import shutil
 from typing import Any
 
 from . import __version__
-from .constants import BACKUP_MANIFEST, backup_root
+from .constants import BACKUP_MANIFEST, INDEX_FILE, PATCH_ARCHIVE, backup_root
+
+DEFAULT_BACKUP_FILES = [INDEX_FILE, PATCH_ARCHIVE]
 
 
 @dataclass(frozen=True)
@@ -16,6 +18,35 @@ class BackupEntry:
     source: str
     backup: str
     size: int
+
+
+@dataclass(frozen=True)
+class BackupPlan:
+    backup_id: str
+    game_dir: str
+    target_dir: str
+    requested_files: list[str]
+    files_to_backup: list[BackupEntry]
+    missing_files: list[str]
+    errors: list[str]
+    warnings: list[str]
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok,
+            "backup_id": self.backup_id,
+            "game_dir": self.game_dir,
+            "target_dir": self.target_dir,
+            "requested_files": self.requested_files,
+            "files_to_backup": [entry.__dict__ for entry in self.files_to_backup],
+            "missing_files": self.missing_files,
+            "errors": self.errors,
+            "warnings": self.warnings,
+        }
 
 
 @dataclass(frozen=True)
@@ -48,23 +79,62 @@ def _assert_inside_game_dir(game_dir: Path, target: Path) -> None:
         raise ValueError(f"Refusing to operate outside game directory: {target}")
 
 
+def plan_backup(game_dir: Path | str, relative_files: list[str] | None = None, *, backup_id: str | None = None) -> BackupPlan:
+    root = Path(game_dir)
+    actual_backup_id = backup_id or make_backup_id()
+    requested_files = list(relative_files or DEFAULT_BACKUP_FILES)
+    target_dir = backup_root(root) / actual_backup_id
+    files_to_backup: list[BackupEntry] = []
+    missing_files: list[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if not root.exists() or not root.is_dir():
+        errors.append(f"Game directory does not exist: {root}")
+        return BackupPlan(actual_backup_id, str(root), str(target_dir), requested_files, files_to_backup, missing_files, errors, warnings)
+    if target_dir.exists():
+        errors.append(f"Backup already exists: {target_dir}")
+
+    for relative_name in requested_files:
+        source = root / relative_name
+        try:
+            _assert_inside_game_dir(root, source)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        if not source.exists() or not source.is_file():
+            missing_files.append(relative_name)
+            continue
+        files_to_backup.append(
+            BackupEntry(
+                source=relative_name,
+                backup=relative_name,
+                size=source.stat().st_size,
+            )
+        )
+
+    if not files_to_backup:
+        errors.append("No requested files exist to back up.")
+    if missing_files:
+        warnings.append("Some requested files do not exist and will be skipped.")
+
+    return BackupPlan(actual_backup_id, str(root), str(target_dir), requested_files, files_to_backup, missing_files, errors, warnings)
+
+
 def create_backup(game_dir: Path | str, relative_files: list[str], *, backup_id: str | None = None) -> BackupManifest:
     root = Path(game_dir)
-    if not root.exists() or not root.is_dir():
-        raise FileNotFoundError(f"Game directory does not exist: {root}")
+    plan = plan_backup(root, relative_files, backup_id=backup_id)
+    if plan.errors:
+        raise FileNotFoundError("; ".join(plan.errors))
 
-    actual_backup_id = backup_id or make_backup_id()
-    target_dir = backup_root(root) / actual_backup_id
-    if target_dir.exists():
-        raise FileExistsError(f"Backup already exists: {target_dir}")
+    target_dir = Path(plan.target_dir)
     target_dir.mkdir(parents=True)
 
     entries: list[BackupEntry] = []
-    for relative_name in relative_files:
+    for planned_entry in plan.files_to_backup:
+        relative_name = planned_entry.source
         source = root / relative_name
         _assert_inside_game_dir(root, source)
-        if not source.exists() or not source.is_file():
-            continue
 
         backup_path = target_dir / relative_name
         backup_path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,7 +148,7 @@ def create_backup(game_dir: Path | str, relative_files: list[str], *, backup_id:
         )
 
     manifest = BackupManifest(
-        backup_id=actual_backup_id,
+        backup_id=plan.backup_id,
         created_at=datetime.now(timezone.utc).isoformat(),
         tool_version=__version__,
         game_dir=str(root),

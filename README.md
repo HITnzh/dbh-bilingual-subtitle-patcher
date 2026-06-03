@@ -12,6 +12,7 @@ Implemented:
 
 - `verify`: inspect a DBH game directory and report required files.
 - `patch --dry-run`: produce a local patch plan without writing game files.
+- `backup`: create a manifest-backed backup of files the patcher may modify.
 - `restore`: restore files from backups created by this tool.
 - Core merge helpers for bilingual subtitle text.
 - `tools`: inspect external DBH helper tools and print example extractor/packer commands.
@@ -33,6 +34,8 @@ Run from the repository root during development:
 $env:PYTHONPATH = "src"
 python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub patch --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
+python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
+python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub restore --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub tools --examples --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
@@ -150,5 +153,6 @@ git merge feature/project-skeleton
 
 - Never distribute official game text or generated game archives.
 - Always create a timestamped backup before writing any game file.
+- Use `backup --dry-run` before creating backups in a real install directory.
 - Refuse unknown game file versions by default once version hashes are implemented.
 - Keep `patch --dry-run` useful enough to inspect every planned write before applying.

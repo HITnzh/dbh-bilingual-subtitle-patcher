@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from .backup_restore import restore_backup
+from .backup_restore import DEFAULT_BACKUP_FILES, create_backup, plan_backup, restore_backup
 from .catalog import load_catalog, merge_catalogs, save_catalog
 from .game_files import GameDirectoryReport, inspect_game_dir
 from .patcher import PatchPlan, build_patch_plan
@@ -168,6 +168,30 @@ def print_quality_report(data: dict[str, Any], report_path: Path | None) -> None
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_backup_plan(data: dict[str, Any], *, dry_run: bool) -> None:
+    print(f"Game directory: {data['game_dir']}")
+    print(f"Backup id: {data['backup_id']}")
+    print(f"Target: {data['target_dir']}")
+    print(f"Mode: {'dry-run' if dry_run else 'create'}")
+    if data["files_to_backup"]:
+        print("Files to back up:")
+        for entry in data["files_to_backup"]:
+            print(f"  - {entry['source']} ({entry['size']} bytes)")
+    if data["missing_files"]:
+        print("Missing files:")
+        for name in data["missing_files"]:
+            print(f"  - {name}")
+    if data["warnings"]:
+        print("Warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+    if data["errors"]:
+        print("Errors:")
+        for error in data["errors"]:
+            print(f"  - {error}")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -186,6 +210,13 @@ def build_parser() -> argparse.ArgumentParser:
     patch.add_argument("--dry-run", action="store_true", help="Inspect planned writes without modifying game files.")
     patch.add_argument("--force", action="store_true", help="Allow planning over an existing patch archive.")
     patch.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    backup = subparsers.add_parser("backup", help="Back up files this tool may modify.")
+    add_game_dir_argument(backup)
+    backup.add_argument("--file", action="append", dest="files", help="Relative game file to back up. May be repeated.")
+    backup.add_argument("--backup-id", help="Backup id. Defaults to a UTC timestamp.")
+    backup.add_argument("--dry-run", action="store_true", help="Show the backup plan without copying files.")
+    backup.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     restore = subparsers.add_parser("restore", help="Restore a backup created by this tool.")
     add_game_dir_argument(restore)
@@ -250,6 +281,26 @@ def run_patch(args: argparse.Namespace) -> int:
     else:
         print_patch_plan(plan)
     return 0 if plan.can_apply else 2
+
+
+def run_backup(args: argparse.Namespace) -> int:
+    files = args.files or DEFAULT_BACKUP_FILES
+    try:
+        plan = plan_backup(args.game_dir, files, backup_id=args.backup_id)
+        data = plan.to_dict()
+        data["dry_run"] = args.dry_run
+        if plan.ok and not args.dry_run:
+            manifest = create_backup(args.game_dir, files, backup_id=plan.backup_id)
+            data["manifest"] = manifest.to_dict()
+    except (FileExistsError, FileNotFoundError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print_json(data)
+    else:
+        print_backup_plan(data, dry_run=args.dry_run)
+    return 0 if data["ok"] else 2
 
 
 def run_restore(args: argparse.Namespace) -> int:
@@ -341,6 +392,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_verify(args)
     if args.command == "patch":
         return run_patch(args)
+    if args.command == "backup":
+        return run_backup(args)
     if args.command == "restore":
         return run_restore(args)
     if args.command == "tools":
