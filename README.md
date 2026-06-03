@@ -16,6 +16,7 @@ Implemented:
 - Core merge helpers for bilingual subtitle text.
 - `tools`: inspect external DBH helper tools and print example extractor/packer commands.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
+- `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
 Not implemented yet:
 
@@ -35,6 +36,7 @@ python -m dbh_bisub patch --game-dir "D:\SteamLibrary\steamapps\common\Detroit B
 python -m dbh_bisub restore --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub tools --examples --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
+python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
 ```
 
 JSON output is available for automation:
@@ -100,6 +102,18 @@ The output is normalized to:
   ]
 }
 ```
+
+Quality checks can be tuned for experiments:
+
+```powershell
+python -m dbh_bisub lint `
+  --catalog ".\work\bilingual.json" `
+  --max-lines 2 `
+  --max-line-chars 84 `
+  --max-total-chars 160
+```
+
+The lint report flags empty text, too many visual lines, overlong lines, overlong entries, and control-token differences between bilingual lines.
 
 Optional terminology CSV is applied to Chinese text before merging:
 

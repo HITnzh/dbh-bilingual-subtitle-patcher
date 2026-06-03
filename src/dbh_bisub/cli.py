@@ -10,6 +10,12 @@ from .backup_restore import restore_backup
 from .catalog import load_catalog, merge_catalogs, save_catalog
 from .game_files import GameDirectoryReport, inspect_game_dir
 from .patcher import PatchPlan, build_patch_plan
+from .quality import (
+    DEFAULT_MAX_LINE_CHARS,
+    DEFAULT_MAX_LINES,
+    DEFAULT_MAX_TOTAL_CHARS,
+    inspect_catalog_quality,
+)
 from .terminology import apply_terminology_to_catalog, load_terminology
 from .toolchain import (
     build_file_parser_extract_command,
@@ -137,6 +143,31 @@ def print_merge_report(data: dict[str, Any], output: Path, report_path: Path | N
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_quality_report(data: dict[str, Any], report_path: Path | None) -> None:
+    print(f"Entries: {data['entries']}")
+    print(f"Issues: {data['issue_count']}")
+    print(f"Warnings: {data['warnings']}")
+    print(f"Errors: {data['errors']}")
+    print(f"Longest line: {data['longest_line_chars']} chars")
+    print(f"Longest entry: {data['longest_total_chars']} chars")
+    if data["issues_by_code"]:
+        print("Issues by code:")
+        for code, count in data["issues_by_code"].items():
+            print(f"  - {code}: {count}")
+    if report_path:
+        print(f"Report: {report_path}")
+    if data["issues"]:
+        print("Issues:")
+        for issue in data["issues"][:30]:
+            extra = ""
+            if issue.get("limit") is not None:
+                extra = f" ({issue.get('value')} > {issue.get('limit')})"
+            print(f"  - [{issue['level']}] {issue['key']} {issue['code']}: {issue['message']}{extra}")
+        if len(data["issues"]) > 30:
+            print(f"  - ... {len(data['issues']) - 30} more")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -181,6 +212,24 @@ def build_parser() -> argparse.ArgumentParser:
     merge.add_argument("--report", type=Path, help="Optional JSON merge report path.")
     merge.add_argument("--terms", type=Path, help="Optional terminology CSV applied to Chinese text before merging.")
     merge.add_argument("--json", action="store_true", help="Print machine-readable report JSON.")
+
+    lint = subparsers.add_parser("lint", help="Inspect a merged text catalog for subtitle quality risks.")
+    lint.add_argument("--catalog", required=True, type=Path, help="Catalog JSON to inspect.")
+    lint.add_argument("--report", type=Path, help="Optional JSON quality report path.")
+    lint.add_argument("--max-lines", type=int, default=DEFAULT_MAX_LINES, help="Maximum visual lines per entry.")
+    lint.add_argument(
+        "--max-line-chars",
+        type=int,
+        default=DEFAULT_MAX_LINE_CHARS,
+        help="Maximum characters in one visual line.",
+    )
+    lint.add_argument(
+        "--max-total-chars",
+        type=int,
+        default=DEFAULT_MAX_TOTAL_CHARS,
+        help="Maximum total characters across all visual lines.",
+    )
+    lint.add_argument("--json", action="store_true", help="Print machine-readable report JSON.")
 
     return parser
 
@@ -261,6 +310,30 @@ def run_merge(args: argparse.Namespace) -> int:
     return 0 if result.report.ok else 2
 
 
+def run_lint(args: argparse.Namespace) -> int:
+    try:
+        catalog = load_catalog(args.catalog)
+        report = inspect_catalog_quality(
+            catalog,
+            max_lines=args.max_lines,
+            max_line_chars=args.max_line_chars,
+            max_total_chars=args.max_total_chars,
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    report_data = report.to_dict()
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(report_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    if args.json:
+        print_json(report_data)
+    else:
+        print_quality_report(report_data, args.report)
+    return 0 if report.ok else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -274,5 +347,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_tools(args)
     if args.command == "merge":
         return run_merge(args)
+    if args.command == "lint":
+        return run_lint(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
