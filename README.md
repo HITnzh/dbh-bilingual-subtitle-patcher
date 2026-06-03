@@ -27,13 +27,14 @@ Implemented:
 - `patch-stage`: run local backup preflight, catalog injection, packaging, and repack dry-run planning.
 - `patch-materialize`: copy packaged patch files into the local extracted work tree.
 - `patch-repack`: dry-run or explicitly execute IDX-Detroit repack with backup protection.
+- `patch-apply`: run staging, materialize, and protected repack as one prepared-workdir workflow.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 - `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
 Not implemented yet:
 
 - DBH extractor/packer integration.
-- One-command real patch application to `BigFile_PC.idx` / `BigFile_PC.d30`.
+- Fully automated extract-to-apply workflow.
 - Steam version hash allowlist.
 - GUI.
 
@@ -64,6 +65,7 @@ python -m dbh_bisub patch-package --work-dir ".\work\patch" --game-dir "D:\Steam
 python -m dbh_bisub patch-stage --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --require-repack-plan --result ".\work\patch\reports\patch-stage-result.json"
 python -m dbh_bisub patch-materialize --work-dir ".\work\patch" --result ".\work\patch\reports\patch-materialize-result.json"
 python -m dbh_bisub patch-repack --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-repack-result.json"
+python -m dbh_bisub patch-apply --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-apply-result.json"
 ```
 
 JSON output is available for automation:
@@ -359,3 +361,15 @@ python -m dbh_bisub patch-repack `
 ```
 
 `patch-repack` requires a materialize manifest by default and stays in dry-run mode unless `--execute` is passed. With `--execute`, it first creates a backup of the game files this tool may modify, then runs the IDX-Detroit repack command.
+
+Use the prepared-workdir apply command to run the local chain in one step:
+
+```powershell
+python -m dbh_bisub patch-apply `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --work-dir ".\work\patch" `
+  --idx-detroit "C:\Tools\IDX_Detroit.exe" `
+  --result ".\work\patch\reports\patch-apply-result.json"
+```
+
+`patch-apply` runs `patch-stage`, `patch-materialize`, and `patch-repack`. It defaults to repack dry-run mode. Pass `--execute-repack` only when the staged output and dry-run command have been reviewed; the command then creates a backup before running IDX-Detroit.
