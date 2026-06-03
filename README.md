@@ -22,6 +22,7 @@ Implemented:
 - `build-catalog`: discover, merge, apply terminology, and lint catalogs in one step.
 - `prepare`: create a local patch work directory without writing game files.
 - `inject-catalog`: inject the bilingual catalog into a target JSON catalog while preserving its shape.
+- `patch-inject`: inject the staged bilingual catalog from a prepared work directory.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 - `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
@@ -54,6 +55,7 @@ python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chin
 python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
 python -m dbh_bisub prepare --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --catalog ".\work\bilingual.json" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe"
 python -m dbh_bisub inject-catalog --source ".\work\patch\catalog\bilingual.json" --target ".\work\patch\extracted\ChineseTraditional.json" --output ".\work\patch\generated\ChineseTraditional.json" --report ".\work\patch\reports\inject-report.json"
+python -m dbh_bisub patch-inject --work-dir ".\work\patch" --result ".\work\patch\reports\patch-inject-result.json"
 ```
 
 JSON output is available for automation:
@@ -292,3 +294,13 @@ python -m dbh_bisub inject-catalog `
 ```
 
 `inject-catalog` updates only matching keys and preserves common target shapes such as plain mappings, `entries` lists, `items` lists, and nested `strings` objects. It writes a report with updated, unchanged, skipped, missing-in-source, and missing-in-target counts.
+
+For the prepared work directory workflow, use the default injection command:
+
+```powershell
+python -m dbh_bisub patch-inject `
+  --work-dir ".\work\patch" `
+  --result ".\work\patch\reports\patch-inject-result.json"
+```
+
+`patch-inject` reads `catalog/bilingual.json`, auto-selects the single discovered Chinese catalog under `extracted/`, writes the patched catalog under `generated/`, and writes `reports/inject-report.json`. Pass `--target` when more than one Chinese catalog is present.

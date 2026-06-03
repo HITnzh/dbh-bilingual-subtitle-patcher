@@ -16,6 +16,7 @@ from .hash_manifest import compare_hash_manifest, load_hash_manifest, save_hash_
 from .idx_archive import default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
 from .inject_catalog import inject_catalog_file
 from .patcher import PatchPlan, build_patch_plan
+from .patch_inject import patch_inject_workdir, save_patch_inject_result
 from .prepare import prepare_patch_workdir
 from .quality import (
     DEFAULT_MAX_LINE_CHARS,
@@ -409,6 +410,32 @@ def print_injection_result(data: dict[str, Any]) -> None:
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_patch_inject_result(data: dict[str, Any]) -> None:
+    print(f"Work directory: {data['work_dir']}")
+    if data["source"]:
+        print(f"Source: {data['source']}")
+    if data["target"]:
+        print(f"Target: {data['target']}")
+    if data["output"]:
+        print(f"Output: {data['output']}")
+    if data["report_path"]:
+        print(f"Report: {data['report_path']}")
+    if data["injection"]:
+        report = data["injection"]["report"]
+        print(f"Updated: {report['updated']}")
+        print(f"Unchanged: {report['unchanged']}")
+        print(f"Skipped: {report['skipped']}")
+    if data["warnings"]:
+        print("Warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+    if data["errors"]:
+        print("Errors:")
+        for error in data["errors"]:
+            print(f"  - {error}")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -453,6 +480,16 @@ def build_parser() -> argparse.ArgumentParser:
     inject.add_argument("--report", type=Path, help="Optional JSON injection report path.")
     inject.add_argument("--text-field", help="Explicit text field to update inside object entries.")
     inject.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    patch_inject = subparsers.add_parser("patch-inject", help="Inject staged bilingual catalog into a prepared work directory.")
+    patch_inject.add_argument("--work-dir", required=True, type=Path, help="Prepared patch work directory.")
+    patch_inject.add_argument("--source", type=Path, help="Bilingual source catalog. Defaults to catalog/bilingual.json.")
+    patch_inject.add_argument("--target", type=Path, help="Target catalog. Defaults to the single discovered Chinese catalog.")
+    patch_inject.add_argument("--output", type=Path, help="Patched output catalog. Defaults under generated/.")
+    patch_inject.add_argument("--report", type=Path, help="Injection report. Defaults to reports/inject-report.json.")
+    patch_inject.add_argument("--result", type=Path, help="Optional full patch-inject result JSON.")
+    patch_inject.add_argument("--text-field", help="Explicit text field to update inside object entries.")
+    patch_inject.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     backup = subparsers.add_parser("backup", help="Back up files this tool may modify.")
     add_game_dir_argument(backup)
@@ -670,6 +707,30 @@ def run_inject_catalog(args: argparse.Namespace) -> int:
     else:
         print_injection_result(data)
     return 0 if result.report.ok else 2
+
+
+def run_patch_inject(args: argparse.Namespace) -> int:
+    try:
+        result = patch_inject_workdir(
+            args.work_dir,
+            source=args.source,
+            target=args.target,
+            output=args.output,
+            report=args.report,
+            text_field=args.text_field,
+        )
+        if args.result:
+            save_patch_inject_result(args.result, result)
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    data = result.to_dict()
+    if args.json:
+        print_json(data)
+    else:
+        print_patch_inject_result(data)
+    return 0 if result.ok else 2
 
 
 def run_backup(args: argparse.Namespace) -> int:
@@ -911,6 +972,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_prepare(args)
     if args.command == "inject-catalog":
         return run_inject_catalog(args)
+    if args.command == "patch-inject":
+        return run_patch_inject(args)
     if args.command == "backup":
         return run_backup(args)
     if args.command == "restore":
