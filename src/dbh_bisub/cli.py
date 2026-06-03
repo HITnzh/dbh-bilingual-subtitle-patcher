@@ -95,6 +95,21 @@ def print_hash_snapshot(data: dict[str, Any], output: Path | None) -> None:
 def print_patch_plan(plan: PatchPlan) -> None:
     print(f"Game directory: {plan.game_dir}")
     print(f"Mode: {'dry-run' if plan.dry_run else 'apply'}")
+    if plan.catalog:
+        entries = plan.catalog_entries if plan.catalog_entries is not None else "unknown"
+        print(f"Catalog: {plan.catalog} ({entries} entries)")
+    if plan.work_dir:
+        print(f"Work directory: {plan.work_dir}")
+    if plan.hash_manifest:
+        print(f"Hash manifest: {plan.hash_manifest}")
+        if plan.hash_report:
+            print(f"Hash status: {'ok' if plan.hash_report['ok'] else 'failed'}")
+    if plan.backup_plan:
+        print(f"Backup id: {plan.backup_plan['backup_id']}")
+    if plan.steps:
+        print("Steps:")
+        for step in plan.steps:
+            print(f"  - [{step.status}] {step.id}: {step.description}")
     if plan.planned_writes:
         print("Planned writes:")
         for name in plan.planned_writes:
@@ -364,6 +379,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_game_dir_argument(patch)
     patch.add_argument("--dry-run", action="store_true", help="Inspect planned writes without modifying game files.")
     patch.add_argument("--force", action="store_true", help="Allow planning over an existing patch archive.")
+    patch.add_argument("--catalog", type=Path, help="Bilingual catalog JSON to apply.")
+    patch.add_argument("--work-dir", type=Path, help="Patch work directory for extracted and generated files.")
+    patch.add_argument("--hash-manifest", type=Path, help="Hash manifest required before writing game files.")
+    patch.add_argument("--require-hash", action="store_true", help="Fail planning when --hash-manifest is omitted.")
+    patch.add_argument("--file-parser", type=Path, help="Path to FileParser executable.")
+    patch.add_argument("--idx-detroit", type=Path, help="Path to IDX_Detroit executable.")
     patch.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     backup = subparsers.add_parser("backup", help="Back up files this tool may modify.")
@@ -521,7 +542,17 @@ def run_verify(args: argparse.Namespace) -> int:
 
 
 def run_patch(args: argparse.Namespace) -> int:
-    plan = build_patch_plan(args.game_dir, dry_run=args.dry_run, force=args.force)
+    plan = build_patch_plan(
+        args.game_dir,
+        dry_run=args.dry_run,
+        force=args.force,
+        catalog=args.catalog,
+        work_dir=args.work_dir,
+        hash_manifest=args.hash_manifest,
+        require_hash=args.require_hash,
+        file_parser=args.file_parser,
+        idx_detroit=args.idx_detroit,
+    )
     if args.json:
         print_json(plan.to_dict())
     else:

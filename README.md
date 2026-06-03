@@ -39,7 +39,7 @@ $env:PYTHONPATH = "src"
 python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub hashes snapshot --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --output ".\data\steam-local.hashes.json" --version-id "steam-local"
 python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --hash-manifest ".\data\steam-local.hashes.json"
-python -m dbh_bisub patch --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
+python -m dbh_bisub patch --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --catalog ".\work\bilingual.json" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe" --dry-run
 python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
 python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub restore --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
@@ -236,3 +236,19 @@ python -m dbh_bisub hashes check `
 ```
 
 `BigFile_PC.d30` is excluded by default because this project treats it as the patch archive slot. Pass `--include-patch-archive` only when you intentionally want to record or compare it.
+
+## Patch Planning
+
+Real patch writing is still intentionally blocked, but `patch --dry-run` now performs a full preflight plan:
+
+```powershell
+python -m dbh_bisub patch `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --catalog ".\work\bilingual.json" `
+  --work-dir ".\work\patch" `
+  --hash-manifest ".\data\steam-local.hashes.json" `
+  --idx-detroit "C:\Tools\IDX_Detroit.exe" `
+  --dry-run
+```
+
+The preflight plan validates the game directory, bilingual catalog, hash manifest, backup plan, helper tools, planned writes, and the work directory state. Use `--require-hash` to make a missing hash manifest a hard failure.
