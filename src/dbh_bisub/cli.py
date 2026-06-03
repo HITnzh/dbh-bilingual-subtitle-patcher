@@ -15,6 +15,7 @@ from .game_files import GameDirectoryReport, inspect_game_dir
 from .hash_manifest import compare_hash_manifest, load_hash_manifest, save_hash_manifest, snapshot_hash_manifest
 from .idx_archive import default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
 from .patcher import PatchPlan, build_patch_plan
+from .prepare import prepare_patch_workdir
 from .quality import (
     DEFAULT_MAX_LINE_CHARS,
     DEFAULT_MAX_LINES,
@@ -361,6 +362,31 @@ def print_build_catalog_result(data: dict[str, Any]) -> None:
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_prepare_result(data: dict[str, Any]) -> None:
+    layout = data["layout"]
+    print(f"Work directory: {layout['root']}")
+    print(f"Catalog copy: {layout['catalog_path']}")
+    print(f"Patch plan: {layout['patch_plan_path']}")
+    print(f"Prepare report: {layout['prepare_result_path']}")
+    if data["created_dirs"]:
+        print("Created directories:")
+        for name in data["created_dirs"]:
+            print(f"  - {name}")
+    if data["written_files"]:
+        print("Written files:")
+        for name in data["written_files"]:
+            print(f"  - {name}")
+    if data["warnings"]:
+        print("Warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+    if data["errors"]:
+        print("Errors:")
+        for error in data["errors"]:
+            print(f"  - {error}")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -386,6 +412,17 @@ def build_parser() -> argparse.ArgumentParser:
     patch.add_argument("--file-parser", type=Path, help="Path to FileParser executable.")
     patch.add_argument("--idx-detroit", type=Path, help="Path to IDX_Detroit executable.")
     patch.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    prepare = subparsers.add_parser("prepare", help="Prepare a local patch work directory without writing game files.")
+    add_game_dir_argument(prepare)
+    prepare.add_argument("--catalog", required=True, type=Path, help="Bilingual catalog JSON to stage.")
+    prepare.add_argument("--work-dir", required=True, type=Path, help="Patch work directory to create or reuse.")
+    prepare.add_argument("--hash-manifest", type=Path, help="Hash manifest required before writing game files.")
+    prepare.add_argument("--require-hash", action="store_true", help="Fail when --hash-manifest is omitted.")
+    prepare.add_argument("--file-parser", type=Path, help="Path to FileParser executable.")
+    prepare.add_argument("--idx-detroit", type=Path, help="Path to IDX_Detroit executable.")
+    prepare.add_argument("--force", action="store_true", help="Allow reusing a non-empty work directory.")
+    prepare.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     backup = subparsers.add_parser("backup", help="Back up files this tool may modify.")
     add_game_dir_argument(backup)
@@ -558,6 +595,30 @@ def run_patch(args: argparse.Namespace) -> int:
     else:
         print_patch_plan(plan)
     return 0 if plan.can_apply else 2
+
+
+def run_prepare(args: argparse.Namespace) -> int:
+    try:
+        result = prepare_patch_workdir(
+            args.game_dir,
+            catalog=args.catalog,
+            work_dir=args.work_dir,
+            hash_manifest=args.hash_manifest,
+            require_hash=args.require_hash,
+            file_parser=args.file_parser,
+            idx_detroit=args.idx_detroit,
+            force=args.force,
+        )
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    data = result.to_dict()
+    if args.json:
+        print_json(data)
+    else:
+        print_prepare_result(data)
+    return 0 if result.ok else 2
 
 
 def run_backup(args: argparse.Namespace) -> int:
@@ -795,6 +856,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_verify(args)
     if args.command == "patch":
         return run_patch(args)
+    if args.command == "prepare":
+        return run_prepare(args)
     if args.command == "backup":
         return run_backup(args)
     if args.command == "restore":

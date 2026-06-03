@@ -20,6 +20,7 @@ Implemented:
 - `idx`: run audited IDX-Detroit extract/repack plans.
 - `discover`: find English and Chinese JSON catalogs in FileParser output.
 - `build-catalog`: discover, merge, apply terminology, and lint catalogs in one step.
+- `prepare`: create a local patch work directory without writing game files.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 - `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
@@ -50,6 +51,7 @@ python -m dbh_bisub discover --output-dir ".\work\fileparser-output"
 python -m dbh_bisub build-catalog --fileparser-output ".\work\fileparser-output" --output ".\work\bilingual.json" --merge-report ".\work\merge-report.json" --lint-report ".\work\lint-report.json" --terms ".\data\terminology.csv"
 python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
 python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
+python -m dbh_bisub prepare --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --catalog ".\work\bilingual.json" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe"
 ```
 
 JSON output is available for automation:
@@ -252,3 +254,27 @@ python -m dbh_bisub patch `
 ```
 
 The preflight plan validates the game directory, bilingual catalog, hash manifest, backup plan, helper tools, planned writes, and the work directory state. Use `--require-hash` to make a missing hash manifest a hard failure.
+
+Prepare the local work directory after the preflight plan looks good:
+
+```powershell
+python -m dbh_bisub prepare `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --catalog ".\work\bilingual.json" `
+  --work-dir ".\work\patch" `
+  --hash-manifest ".\data\steam-local.hashes.json" `
+  --idx-detroit "C:\Tools\IDX_Detroit.exe"
+```
+
+`prepare` creates:
+
+```text
+work/patch/
+  catalog/bilingual.json
+  extracted/
+  generated/
+  reports/patch-plan.json
+  reports/prepare-result.json
+```
+
+It does not write to the game directory. Existing non-empty work directories are rejected unless `--force` is passed.
