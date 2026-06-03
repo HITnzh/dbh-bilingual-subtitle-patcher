@@ -39,6 +39,7 @@ python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit 
 python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub restore --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub tools --examples --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
+python -m dbh_bisub extract --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --output-dir ".\work\fileparser-output" --dry-run
 python -m dbh_bisub discover --output-dir ".\work\fileparser-output"
 python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
 python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
@@ -77,6 +78,17 @@ python -m dbh_bisub tools `
 After running FileParser, inspect the output directory:
 
 ```powershell
+python -m dbh_bisub extract `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --output-dir ".\work\fileparser-output" `
+  --file-parser "C:\Tools\FileParser.exe" `
+  --dry-run
+
+python -m dbh_bisub extract `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --output-dir ".\work\fileparser-output" `
+  --file-parser "C:\Tools\FileParser.exe"
+
 python -m dbh_bisub discover --output-dir ".\work\fileparser-output"
 ```
 

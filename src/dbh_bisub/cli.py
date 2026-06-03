@@ -9,6 +9,7 @@ from typing import Any
 from .backup_restore import DEFAULT_BACKUP_FILES, create_backup, plan_backup, restore_backup
 from .catalog import load_catalog, merge_catalogs, save_catalog
 from .discovery import discover_catalogs
+from .extractor import plan_extraction, run_extraction
 from .game_files import GameDirectoryReport, inspect_game_dir
 from .patcher import PatchPlan, build_patch_plan
 from .quality import (
@@ -221,6 +222,31 @@ def print_discovery_report(data: dict[str, Any]) -> None:
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_extraction_result(data: dict[str, Any]) -> None:
+    plan = data["plan"] if "plan" in data else data
+    print(f"Game directory: {plan['game_dir']}")
+    print(f"Output directory: {plan['output_dir']}")
+    print(f"Mode: {'dry-run' if plan['dry_run'] else 'extract'}")
+    print(f"Command: {plan['command_text']}")
+    if plan["warnings"]:
+        print("Warnings:")
+        for warning in plan["warnings"]:
+            print(f"  - {warning}")
+    if plan["errors"]:
+        print("Errors:")
+        for error in plan["errors"]:
+            print(f"  - {error}")
+    if "returncode" in data and data["returncode"] is not None:
+        print(f"Return code: {data['returncode']}")
+        if data["stdout"]:
+            print("Stdout:")
+            print(data["stdout"].rstrip())
+        if data["stderr"]:
+            print("Stderr:")
+            print(data["stderr"].rstrip())
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -264,6 +290,15 @@ def build_parser() -> argparse.ArgumentParser:
     tools.add_argument("--object-count", type=int, default=0, help="IDX-Detroit object count; 0 means all.")
     tools.add_argument("--file-size-table", type=Path, help="FileSizeTable path for repack examples.")
     tools.add_argument("--verbose-example", action="store_true", help="Include FileParser verbose flag in examples.")
+
+    extract = subparsers.add_parser("extract", help="Run FileParser against a local DBH game directory.")
+    add_game_dir_argument(extract)
+    extract.add_argument("--output-dir", required=True, type=Path, help="FileParser output directory.")
+    extract.add_argument("--file-parser", type=Path, help="Path to FileParser executable.")
+    extract.add_argument("--dry-run", action="store_true", help="Print the extraction plan without running FileParser.")
+    extract.add_argument("--force", action="store_true", help="Allow using a non-empty output directory.")
+    extract.add_argument("--verbose-tool", action="store_true", help="Pass FileParser verbose flag.")
+    extract.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     discover = subparsers.add_parser("discover", help="Discover language JSON catalogs in a FileParser output directory.")
     discover.add_argument("--output-dir", required=True, type=Path, help="FileParser output directory.")
@@ -377,6 +412,24 @@ def run_discover(args: argparse.Namespace) -> int:
     return 0 if report.ok else 2
 
 
+def run_extract(args: argparse.Namespace) -> int:
+    plan = plan_extraction(
+        args.game_dir,
+        args.output_dir,
+        file_parser=args.file_parser,
+        dry_run=args.dry_run,
+        force=args.force,
+        verbose=args.verbose_tool,
+    )
+    result = run_extraction(plan)
+    data = result.to_dict()
+    if args.json:
+        print_json(data)
+    else:
+        print_extraction_result(data)
+    return 0 if result.ok else 2
+
+
 def run_merge(args: argparse.Namespace) -> int:
     try:
         english = load_catalog(args.english)
@@ -441,6 +494,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_restore(args)
     if args.command == "tools":
         return run_tools(args)
+    if args.command == "extract":
+        return run_extract(args)
     if args.command == "discover":
         return run_discover(args)
     if args.command == "merge":
