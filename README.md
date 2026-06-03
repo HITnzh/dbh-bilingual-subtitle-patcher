@@ -19,6 +19,7 @@ Implemented:
 - `tools`: inspect external DBH helper tools and print example extractor/packer commands.
 - `idx`: run audited IDX-Detroit extract/repack plans.
 - `discover`: find English and Chinese JSON catalogs in FileParser output.
+- `build-catalog`: discover, merge, apply terminology, and lint catalogs in one step.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 - `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
@@ -46,6 +47,7 @@ python -m dbh_bisub tools --examples --game-dir "D:\SteamLibrary\steamapps\commo
 python -m dbh_bisub idx extract --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --idx-detroit "C:\Tools\IDX_Detroit.exe" --dry-run
 python -m dbh_bisub extract --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --output-dir ".\work\fileparser-output" --dry-run
 python -m dbh_bisub discover --output-dir ".\work\fileparser-output"
+python -m dbh_bisub build-catalog --fileparser-output ".\work\fileparser-output" --output ".\work\bilingual.json" --merge-report ".\work\merge-report.json" --lint-report ".\work\lint-report.json" --terms ".\data\terminology.csv"
 python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
 python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
 ```
@@ -98,6 +100,19 @@ python -m dbh_bisub discover --output-dir ".\work\fileparser-output"
 ```
 
 The command scans JSON files recursively, loads any catalog-like files it can parse, and recommends English/Chinese merge inputs when their filenames or paths are recognizable.
+
+For the normal text build workflow, use the combined command:
+
+```powershell
+python -m dbh_bisub build-catalog `
+  --fileparser-output ".\work\fileparser-output" `
+  --output ".\work\bilingual.json" `
+  --merge-report ".\work\merge-report.json" `
+  --lint-report ".\work\lint-report.json" `
+  --terms ".\data\terminology.csv"
+```
+
+`build-catalog` auto-discovers English and Chinese catalogs, applies terminology to the Chinese side, writes the merged bilingual catalog, and writes merge/lint reports. You can override discovery with explicit `--english` and `--chinese` paths.
 
 IDX-Detroit commands are also exposed with dry-run support:
 

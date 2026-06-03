@@ -7,6 +7,7 @@ import sys
 from typing import Any
 
 from .backup_restore import DEFAULT_BACKUP_FILES, create_backup, plan_backup, restore_backup
+from .build_catalog import build_bilingual_catalog
 from .catalog import load_catalog, merge_catalogs, save_catalog
 from .discovery import discover_catalogs
 from .extractor import plan_extraction, run_extraction
@@ -309,6 +310,42 @@ def print_idx_result(data: dict[str, Any]) -> None:
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_build_catalog_result(data: dict[str, Any]) -> None:
+    print(f"Output: {data['output']}")
+    if data["english"]:
+        print(f"English: {data['english']}")
+    if data["chinese"]:
+        print(f"Chinese: {data['chinese']}")
+    if data["merge_report"]:
+        print(f"Merge report: {data['merge_report']}")
+    if data["lint_report"]:
+        print(f"Lint report: {data['lint_report']}")
+    if data["discovery"]:
+        discovery = data["discovery"]
+        print(f"Discovered JSON catalogs: {len(discovery['files'])}")
+    if data["merge"]:
+        merge = data["merge"]
+        print(f"Merged entries: {merge['merged']}")
+        print(f"Merge issues: {len(merge['issues'])}")
+        terminology = merge.get("terminology")
+        if terminology:
+            print(f"Terminology replacements: {terminology['replacements']}")
+    if data["lint"]:
+        lint = data["lint"]
+        print(f"Lint issues: {lint['issue_count']}")
+        print(f"Lint warnings: {lint['warnings']}")
+        print(f"Lint errors: {lint['errors']}")
+    if data["warnings"]:
+        print("Warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+    if data["errors"]:
+        print("Errors:")
+        for error in data["errors"]:
+            print(f"  - {error}")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -401,6 +438,32 @@ def build_parser() -> argparse.ArgumentParser:
     discover = subparsers.add_parser("discover", help="Discover language JSON catalogs in a FileParser output directory.")
     discover.add_argument("--output-dir", required=True, type=Path, help="FileParser output directory.")
     discover.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    build_catalog = subparsers.add_parser(
+        "build-catalog",
+        help="Discover, merge, and lint English/Chinese catalogs in one step.",
+    )
+    build_catalog.add_argument("--fileparser-output", type=Path, help="FileParser output directory for auto-discovery.")
+    build_catalog.add_argument("--english", type=Path, help="English catalog JSON. Overrides auto-discovery.")
+    build_catalog.add_argument("--chinese", type=Path, help="Chinese catalog JSON. Overrides auto-discovery.")
+    build_catalog.add_argument("--output", required=True, type=Path, help="Output bilingual catalog JSON.")
+    build_catalog.add_argument("--merge-report", type=Path, help="Optional JSON merge report path.")
+    build_catalog.add_argument("--lint-report", type=Path, help="Optional JSON lint report path.")
+    build_catalog.add_argument("--terms", type=Path, help="Optional terminology CSV applied to Chinese text.")
+    build_catalog.add_argument("--max-lines", type=int, default=DEFAULT_MAX_LINES, help="Maximum visual lines per entry.")
+    build_catalog.add_argument(
+        "--max-line-chars",
+        type=int,
+        default=DEFAULT_MAX_LINE_CHARS,
+        help="Maximum characters in one visual line.",
+    )
+    build_catalog.add_argument(
+        "--max-total-chars",
+        type=int,
+        default=DEFAULT_MAX_TOTAL_CHARS,
+        help="Maximum total characters across all visual lines.",
+    )
+    build_catalog.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     merge = subparsers.add_parser("merge", help="Merge English and Chinese text catalogs into bilingual text.")
     merge.add_argument("--english", required=True, type=Path, help="English catalog JSON.")
@@ -617,6 +680,32 @@ def run_idx(args: argparse.Namespace) -> int:
     return 0 if result.ok else 2
 
 
+def run_build_catalog(args: argparse.Namespace) -> int:
+    try:
+        result = build_bilingual_catalog(
+            output=args.output,
+            fileparser_output=args.fileparser_output,
+            english=args.english,
+            chinese=args.chinese,
+            terms=args.terms,
+            merge_report=args.merge_report,
+            lint_report=args.lint_report,
+            max_lines=args.max_lines,
+            max_line_chars=args.max_line_chars,
+            max_total_chars=args.max_total_chars,
+        )
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    data = result.to_dict()
+    if args.json:
+        print_json(data)
+    else:
+        print_build_catalog_result(data)
+    return 0 if result.ok else 2
+
+
 def run_merge(args: argparse.Namespace) -> int:
     try:
         english = load_catalog(args.english)
@@ -689,6 +778,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_extract(args)
     if args.command == "discover":
         return run_discover(args)
+    if args.command == "build-catalog":
+        return run_build_catalog(args)
     if args.command == "merge":
         return run_merge(args)
     if args.command == "lint":
