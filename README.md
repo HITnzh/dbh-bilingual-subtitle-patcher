@@ -21,6 +21,7 @@ Implemented:
 - `discover`: find English and Chinese JSON catalogs in FileParser output.
 - `build-catalog`: discover, merge, apply terminology, and lint catalogs in one step.
 - `prepare`: create a local patch work directory without writing game files.
+- `patch-extract`: extract IDX archive data into a prepared work directory.
 - `inject-catalog`: inject the bilingual catalog into a target JSON catalog while preserving its shape.
 - `patch-inject`: inject the staged bilingual catalog from a prepared work directory.
 - `patch-package`: package generated patch files and write an audited repack plan.
@@ -59,6 +60,7 @@ python -m dbh_bisub build-catalog --fileparser-output ".\work\fileparser-output"
 python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
 python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
 python -m dbh_bisub prepare --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --catalog ".\work\bilingual.json" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe"
+python -m dbh_bisub patch-extract --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-extract-result.json"
 python -m dbh_bisub inject-catalog --source ".\work\patch\catalog\bilingual.json" --target ".\work\patch\extracted\ChineseTraditional.json" --output ".\work\patch\generated\ChineseTraditional.json" --report ".\work\patch\reports\inject-report.json"
 python -m dbh_bisub patch-inject --work-dir ".\work\patch" --result ".\work\patch\reports\patch-inject-result.json"
 python -m dbh_bisub patch-package --work-dir ".\work\patch" --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-package-result.json"
@@ -292,6 +294,18 @@ work/patch/
 ```
 
 It does not write to the game directory. Existing non-empty work directories are rejected unless `--force` is passed.
+
+Plan IDX extraction into the prepared work directory:
+
+```powershell
+python -m dbh_bisub patch-extract `
+  --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
+  --work-dir ".\work\patch" `
+  --idx-detroit "C:\Tools\IDX_Detroit.exe" `
+  --result ".\work\patch\reports\patch-extract-result.json"
+```
+
+`patch-extract` targets `work/patch/extracted/` and defaults to dry-run mode. Pass `--execute` to run IDX-Detroit with that directory as the process working directory. Existing extracted files are rejected unless `--force` is passed.
 
 Inject the bilingual text into a target JSON catalog:
 

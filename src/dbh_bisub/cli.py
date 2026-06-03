@@ -16,6 +16,7 @@ from .hash_manifest import compare_hash_manifest, load_hash_manifest, save_hash_
 from .idx_archive import default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
 from .inject_catalog import inject_catalog_file
 from .patch_apply import apply_patch_workflow, save_patch_apply_result
+from .patch_extract import extract_patch_workdir
 from .patcher import PatchPlan, build_patch_plan
 from .patch_inject import patch_inject_workdir, save_patch_inject_result
 from .patch_materialize import materialize_patch_package, save_patch_materialize_result
@@ -559,6 +560,35 @@ def print_patch_apply_result(data: dict[str, Any]) -> None:
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_patch_extract_result(data: dict[str, Any]) -> None:
+    print(f"Game directory: {data['game_dir']}")
+    print(f"Work directory: {data['work_dir']}")
+    print(f"Extracted directory: {data['extracted_dir']}")
+    print(f"Mode: {'execute' if data['execute'] else 'dry-run'}")
+    print(f"IDX file: {data['idx_file']}")
+    if data["report_path"]:
+        print(f"Report: {data['report_path']}")
+    if data["idx_extract"]:
+        print(f"Command: {data['idx_extract']['command_text']}")
+    if data["returncode"] is not None:
+        print(f"Return code: {data['returncode']}")
+        if data["stdout"]:
+            print("Stdout:")
+            print(data["stdout"].rstrip())
+        if data["stderr"]:
+            print("Stderr:")
+            print(data["stderr"].rstrip())
+    if data["warnings"]:
+        print("Warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+    if data["errors"]:
+        print("Errors:")
+        for error in data["errors"]:
+            print(f"  - {error}")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def print_patch_stage_result(data: dict[str, Any]) -> None:
     print(f"Game directory: {data['game_dir']}")
     print(f"Work directory: {data['work_dir']}")
@@ -625,6 +655,18 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--idx-detroit", type=Path, help="Path to IDX_Detroit executable.")
     prepare.add_argument("--force", action="store_true", help="Allow reusing a non-empty work directory.")
     prepare.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    patch_extract = subparsers.add_parser("patch-extract", help="Extract IDX archive data into a prepared work directory.")
+    add_game_dir_argument(patch_extract)
+    patch_extract.add_argument("--work-dir", required=True, type=Path, help="Prepared patch work directory.")
+    patch_extract.add_argument("--idx-file", type=Path, help="Path to BigFile_PC.idx. Defaults to --game-dir\\BigFile_PC.idx.")
+    patch_extract.add_argument("--idx-detroit", type=Path, help="Path to IDX_Detroit executable.")
+    patch_extract.add_argument("--archive-id", type=int, default=1, help="IDX-Detroit archive id to extract.")
+    patch_extract.add_argument("--object-count", type=int, default=0, help="IDX-Detroit object count; 0 means all.")
+    patch_extract.add_argument("--execute", action="store_true", help="Run IDX-Detroit extraction into work-dir\\extracted.")
+    patch_extract.add_argument("--force", action="store_true", help="Allow using a non-empty extracted directory.")
+    patch_extract.add_argument("--result", type=Path, help="Optional full patch-extract result JSON.")
+    patch_extract.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     inject = subparsers.add_parser("inject-catalog", help="Inject a bilingual catalog into a target JSON catalog.")
     inject.add_argument("--source", required=True, type=Path, help="Bilingual source catalog JSON.")
@@ -914,6 +956,31 @@ def run_prepare(args: argparse.Namespace) -> int:
         print_json(data)
     else:
         print_prepare_result(data)
+    return 0 if result.ok else 2
+
+
+def run_patch_extract(args: argparse.Namespace) -> int:
+    try:
+        result = extract_patch_workdir(
+            args.game_dir,
+            args.work_dir,
+            idx_file=args.idx_file,
+            idx_detroit=args.idx_detroit,
+            archive_id=args.archive_id,
+            object_count=args.object_count,
+            execute=args.execute,
+            force=args.force,
+            report=args.result,
+        )
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    data = result.to_dict()
+    if args.json:
+        print_json(data)
+    else:
+        print_patch_extract_result(data)
     return 0 if result.ok else 2
 
 
@@ -1345,6 +1412,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_patch(args)
     if args.command == "prepare":
         return run_prepare(args)
+    if args.command == "patch-extract":
+        return run_patch_extract(args)
     if args.command == "inject-catalog":
         return run_inject_catalog(args)
     if args.command == "patch-inject":
