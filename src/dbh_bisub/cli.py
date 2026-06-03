@@ -14,6 +14,7 @@ from .extractor import plan_extraction, run_extraction
 from .game_files import GameDirectoryReport, inspect_game_dir
 from .hash_manifest import compare_hash_manifest, load_hash_manifest, save_hash_manifest, snapshot_hash_manifest
 from .idx_archive import default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
+from .inject_catalog import inject_catalog_file
 from .patcher import PatchPlan, build_patch_plan
 from .prepare import prepare_patch_workdir
 from .quality import (
@@ -387,6 +388,27 @@ def print_prepare_result(data: dict[str, Any]) -> None:
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_injection_result(data: dict[str, Any]) -> None:
+    report = data["report"]
+    print(f"Output: {data['output']}")
+    print(f"Source entries: {report['source_entries']}")
+    print(f"Target entries: {report['target_entries']}")
+    print(f"Updated: {report['updated']}")
+    print(f"Unchanged: {report['unchanged']}")
+    print(f"Skipped: {report['skipped']}")
+    if report["missing_in_target"]:
+        print(f"Missing in target: {len(report['missing_in_target'])}")
+    if report["missing_in_source"]:
+        print(f"Missing in source: {len(report['missing_in_source'])}")
+    if report["issues"]:
+        print("Issues:")
+        for issue in report["issues"][:30]:
+            print(f"  - [{issue['level']}] {issue['key']} {issue['code']}: {issue['message']}")
+        if len(report["issues"]) > 30:
+            print(f"  - ... {len(report['issues']) - 30} more")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -423,6 +445,14 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--idx-detroit", type=Path, help="Path to IDX_Detroit executable.")
     prepare.add_argument("--force", action="store_true", help="Allow reusing a non-empty work directory.")
     prepare.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    inject = subparsers.add_parser("inject-catalog", help="Inject a bilingual catalog into a target JSON catalog.")
+    inject.add_argument("--source", required=True, type=Path, help="Bilingual source catalog JSON.")
+    inject.add_argument("--target", required=True, type=Path, help="Target JSON catalog to patch.")
+    inject.add_argument("--output", required=True, type=Path, help="Patched output JSON.")
+    inject.add_argument("--report", type=Path, help="Optional JSON injection report path.")
+    inject.add_argument("--text-field", help="Explicit text field to update inside object entries.")
+    inject.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     backup = subparsers.add_parser("backup", help="Back up files this tool may modify.")
     add_game_dir_argument(backup)
@@ -619,6 +649,27 @@ def run_prepare(args: argparse.Namespace) -> int:
     else:
         print_prepare_result(data)
     return 0 if result.ok else 2
+
+
+def run_inject_catalog(args: argparse.Namespace) -> int:
+    try:
+        result = inject_catalog_file(
+            source=args.source,
+            target=args.target,
+            output=args.output,
+            report=args.report,
+            text_field=args.text_field,
+        )
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    data = result.to_dict()
+    if args.json:
+        print_json(data)
+    else:
+        print_injection_result(data)
+    return 0 if result.report.ok else 2
 
 
 def run_backup(args: argparse.Namespace) -> int:
@@ -858,6 +909,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_patch(args)
     if args.command == "prepare":
         return run_prepare(args)
+    if args.command == "inject-catalog":
+        return run_inject_catalog(args)
     if args.command == "backup":
         return run_backup(args)
     if args.command == "restore":

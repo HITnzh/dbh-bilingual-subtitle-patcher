@@ -21,6 +21,7 @@ Implemented:
 - `discover`: find English and Chinese JSON catalogs in FileParser output.
 - `build-catalog`: discover, merge, apply terminology, and lint catalogs in one step.
 - `prepare`: create a local patch work directory without writing game files.
+- `inject-catalog`: inject the bilingual catalog into a target JSON catalog while preserving its shape.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 - `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
@@ -52,6 +53,7 @@ python -m dbh_bisub build-catalog --fileparser-output ".\work\fileparser-output"
 python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
 python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
 python -m dbh_bisub prepare --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --catalog ".\work\bilingual.json" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe"
+python -m dbh_bisub inject-catalog --source ".\work\patch\catalog\bilingual.json" --target ".\work\patch\extracted\ChineseTraditional.json" --output ".\work\patch\generated\ChineseTraditional.json" --report ".\work\patch\reports\inject-report.json"
 ```
 
 JSON output is available for automation:
@@ -278,3 +280,15 @@ work/patch/
 ```
 
 It does not write to the game directory. Existing non-empty work directories are rejected unless `--force` is passed.
+
+Inject the bilingual text into a target JSON catalog:
+
+```powershell
+python -m dbh_bisub inject-catalog `
+  --source ".\work\patch\catalog\bilingual.json" `
+  --target ".\work\patch\extracted\ChineseTraditional.json" `
+  --output ".\work\patch\generated\ChineseTraditional.json" `
+  --report ".\work\patch\reports\inject-report.json"
+```
+
+`inject-catalog` updates only matching keys and preserves common target shapes such as plain mappings, `entries` lists, `items` lists, and nested `strings` objects. It writes a report with updated, unchanged, skipped, missing-in-source, and missing-in-target counts.
