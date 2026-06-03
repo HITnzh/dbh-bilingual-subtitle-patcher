@@ -22,6 +22,7 @@ Implemented:
 - `build-catalog`: discover, merge, apply terminology, and lint catalogs in one step.
 - `prepare`: create a local patch work directory without writing game files.
 - `patch-extract`: extract IDX archive data into a prepared work directory.
+- `patch-validate`: validate a prepared/extracted work directory before apply.
 - `inject-catalog`: inject the bilingual catalog into a target JSON catalog while preserving its shape.
 - `patch-inject`: inject the staged bilingual catalog from a prepared work directory.
 - `patch-package`: package generated patch files and write an audited repack plan.
@@ -61,6 +62,7 @@ python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chin
 python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
 python -m dbh_bisub prepare --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --catalog ".\work\bilingual.json" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe"
 python -m dbh_bisub patch-extract --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-extract-result.json"
+python -m dbh_bisub patch-validate --work-dir ".\work\patch" --result ".\work\patch\reports\patch-validate-result.json"
 python -m dbh_bisub inject-catalog --source ".\work\patch\catalog\bilingual.json" --target ".\work\patch\extracted\ChineseTraditional.json" --output ".\work\patch\generated\ChineseTraditional.json" --report ".\work\patch\reports\inject-report.json"
 python -m dbh_bisub patch-inject --work-dir ".\work\patch" --result ".\work\patch\reports\patch-inject-result.json"
 python -m dbh_bisub patch-package --work-dir ".\work\patch" --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-package-result.json"
@@ -306,6 +308,16 @@ python -m dbh_bisub patch-extract `
 ```
 
 `patch-extract` targets `work/patch/extracted/` and defaults to dry-run mode. Pass `--execute` to run IDX-Detroit with that directory as the process working directory. Existing extracted files are rejected unless `--force` is passed.
+
+Validate the prepared work directory before applying:
+
+```powershell
+python -m dbh_bisub patch-validate `
+  --work-dir ".\work\patch" `
+  --result ".\work\patch\reports\patch-validate-result.json"
+```
+
+`patch-validate` checks the expected work directory layout, the staged bilingual catalog, extracted catalog discovery, the single Chinese target catalog assumption, and FileSizeTable discovery. Use `--target` or `--file-size-table` when the real extracted output contains multiple candidates.
 
 Inject the bilingual text into a target JSON catalog:
 

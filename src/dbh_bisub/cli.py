@@ -23,6 +23,7 @@ from .patch_materialize import materialize_patch_package, save_patch_materialize
 from .patch_package import package_patch_workdir, save_patch_package_result
 from .patch_repack import repack_patch_workdir, save_patch_repack_result
 from .patch_stage import save_patch_stage_result, stage_patch_workdir
+from .patch_validate import save_patch_validation_result, validate_patch_workdir
 from .prepare import prepare_patch_workdir
 from .quality import (
     DEFAULT_MAX_LINE_CHARS,
@@ -589,6 +590,26 @@ def print_patch_extract_result(data: dict[str, Any]) -> None:
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_patch_validation_result(data: dict[str, Any]) -> None:
+    print(f"Work directory: {data['work_dir']}")
+    if data["discovery"]:
+        print(f"Discovered JSON catalogs: {len(data['discovery']['files'])}")
+        print(f"Chinese candidates: {len(data['discovery']['chinese_candidates'])}")
+    if data["checks"]:
+        print("Checks:")
+        for check in data["checks"]:
+            print(f"  - [{check['status']}] {check['id']}: {check['message']}")
+    if data["warnings"]:
+        print("Warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+    if data["errors"]:
+        print("Errors:")
+        for error in data["errors"]:
+            print(f"  - {error}")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def print_patch_stage_result(data: dict[str, Any]) -> None:
     print(f"Game directory: {data['game_dir']}")
     print(f"Work directory: {data['work_dir']}")
@@ -667,6 +688,14 @@ def build_parser() -> argparse.ArgumentParser:
     patch_extract.add_argument("--force", action="store_true", help="Allow using a non-empty extracted directory.")
     patch_extract.add_argument("--result", type=Path, help="Optional full patch-extract result JSON.")
     patch_extract.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+
+    patch_validate = subparsers.add_parser("patch-validate", help="Validate a prepared patch work directory before apply.")
+    patch_validate.add_argument("--work-dir", required=True, type=Path, help="Prepared patch work directory.")
+    patch_validate.add_argument("--target", type=Path, help="Expected target catalog. Defaults to the single discovered Chinese catalog.")
+    patch_validate.add_argument("--file-size-table", type=Path, help="Expected FileSizeTable. Defaults to single discovered table.")
+    patch_validate.add_argument("--allow-missing-file-size-table", action="store_true", help="Warn instead of failing when FileSizeTable is missing.")
+    patch_validate.add_argument("--result", type=Path, help="Optional full patch-validate result JSON.")
+    patch_validate.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     inject = subparsers.add_parser("inject-catalog", help="Inject a bilingual catalog into a target JSON catalog.")
     inject.add_argument("--source", required=True, type=Path, help="Bilingual source catalog JSON.")
@@ -981,6 +1010,28 @@ def run_patch_extract(args: argparse.Namespace) -> int:
         print_json(data)
     else:
         print_patch_extract_result(data)
+    return 0 if result.ok else 2
+
+
+def run_patch_validate(args: argparse.Namespace) -> int:
+    try:
+        result = validate_patch_workdir(
+            args.work_dir,
+            target=args.target,
+            file_size_table=args.file_size_table,
+            allow_missing_file_size_table=args.allow_missing_file_size_table,
+        )
+        if args.result:
+            save_patch_validation_result(args.result, result)
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    data = result.to_dict()
+    if args.json:
+        print_json(data)
+    else:
+        print_patch_validation_result(data)
     return 0 if result.ok else 2
 
 
@@ -1414,6 +1465,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_prepare(args)
     if args.command == "patch-extract":
         return run_patch_extract(args)
+    if args.command == "patch-validate":
+        return run_patch_validate(args)
     if args.command == "inject-catalog":
         return run_inject_catalog(args)
     if args.command == "patch-inject":
