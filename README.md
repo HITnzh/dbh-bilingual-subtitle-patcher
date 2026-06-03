@@ -34,7 +34,7 @@ python -m dbh_bisub verify --game-dir "D:\SteamLibrary\steamapps\common\Detroit 
 python -m dbh_bisub patch --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --dry-run
 python -m dbh_bisub restore --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub tools --examples --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
-python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json"
+python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
 ```
 
 JSON output is available for automation:
@@ -100,6 +100,20 @@ The output is normalized to:
   ]
 }
 ```
+
+Optional terminology CSV is applied to Chinese text before merging:
+
+```csv
+source,target,note
+康纳,康納,character name
+耶利哥,杰里科,location
+```
+
+Supported column aliases:
+
+- Source: `source`, `from`, `traditional`, `original`
+- Target: `target`, `to`, `simplified`, `replacement`
+- Note: `note`, `notes`, `comment`
 
 ## Development
 

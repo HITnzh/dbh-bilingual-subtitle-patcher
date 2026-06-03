@@ -7,9 +7,10 @@ import sys
 from typing import Any
 
 from .backup_restore import restore_backup
-from .catalog import load_catalog, merge_catalogs, save_catalog, save_report
+from .catalog import load_catalog, merge_catalogs, save_catalog
 from .game_files import GameDirectoryReport, inspect_game_dir
 from .patcher import PatchPlan, build_patch_plan
+from .terminology import apply_terminology_to_catalog, load_terminology
 from .toolchain import (
     build_file_parser_extract_command,
     build_idx_extract_command,
@@ -119,6 +120,14 @@ def print_merge_report(data: dict[str, Any], output: Path, report_path: Path | N
     print(f"Output: {output}")
     if report_path:
         print(f"Report: {report_path}")
+    terminology = data.get("terminology")
+    if terminology:
+        print("Terminology:")
+        print(f"  Rules loaded: {terminology['rules_loaded']}")
+        print(f"  Rules matched: {terminology['rules_matched']}")
+        print(f"  Replacements: {terminology['replacements']}")
+        for source, count in terminology["by_source"].items():
+            print(f"  - {source}: {count}")
     if data["issues"]:
         print("Issues:")
         for issue in data["issues"][:20]:
@@ -170,6 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
     merge.add_argument("--chinese", required=True, type=Path, help="Chinese catalog JSON.")
     merge.add_argument("--output", required=True, type=Path, help="Output bilingual catalog JSON.")
     merge.add_argument("--report", type=Path, help="Optional JSON merge report path.")
+    merge.add_argument("--terms", type=Path, help="Optional terminology CSV applied to Chinese text before merging.")
     merge.add_argument("--json", action="store_true", help="Print machine-readable report JSON.")
 
     return parser
@@ -228,15 +238,22 @@ def run_merge(args: argparse.Namespace) -> int:
     try:
         english = load_catalog(args.english)
         chinese = load_catalog(args.chinese)
+        terminology_report = None
+        if args.terms:
+            rules = load_terminology(args.terms)
+            chinese, terminology_report = apply_terminology_to_catalog(chinese, rules)
         result = merge_catalogs(english, chinese)
         save_catalog(args.output, result.catalog)
-        if args.report:
-            save_report(args.report, result.report)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 
     report_data = result.report.to_dict()
+    if terminology_report:
+        report_data["terminology"] = terminology_report.to_dict()
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(report_data, ensure_ascii=False, indent=2), encoding="utf-8")
     if args.json:
         print_json(report_data)
     else:
