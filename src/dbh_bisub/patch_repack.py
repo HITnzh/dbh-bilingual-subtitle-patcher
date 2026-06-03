@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .backup_restore import DEFAULT_BACKUP_FILES, create_backup, plan_backup
+from .hash_manifest import compare_hash_manifest, load_hash_manifest
 from .idx_archive import default_idx_file, plan_idx_repack, run_idx_plan
 from .patch_materialize import MATERIALIZE_MANIFEST_JSON
 from .patch_package import PACKAGE_MANIFEST_JSON
@@ -32,6 +33,7 @@ class PatchRepackResult:
     idx_file: str
     file_size_table: str | None
     materialize_manifest: str | None
+    hash_report: dict[str, Any] | None
     backup_plan: dict[str, Any] | None
     backup_manifest: dict[str, Any] | None
     repack: dict[str, Any] | None
@@ -48,6 +50,7 @@ class PatchRepackResult:
             "idx_file": self.idx_file,
             "file_size_table": self.file_size_table,
             "materialize_manifest": self.materialize_manifest,
+            "hash_report": self.hash_report,
             "backup_plan": self.backup_plan,
             "backup_manifest": self.backup_manifest,
             "repack": self.repack,
@@ -64,10 +67,13 @@ def repack_patch_workdir(
     idx_file: Path | str | None = None,
     file_size_table: Path | str | None = None,
     materialize_manifest: Path | str | None = None,
+    hash_manifest: Path | str | None = None,
     idx_detroit: Path | str | None = None,
     backup_id: str | None = None,
     execute: bool = False,
     allow_unmaterialized: bool = False,
+    require_hash: bool = False,
+    allow_unverified_execute: bool = False,
 ) -> PatchRepackResult:
     game_root = Path(game_dir)
     work_root = Path(work_dir)
@@ -75,6 +81,7 @@ def repack_patch_workdir(
     errors: list[str] = []
     warnings: list[str] = []
     steps: list[RepackStep] = []
+    hash_report: dict[str, Any] | None = None
 
     materialize_path = _resolve_materialize_manifest(work_root, materialize_manifest)
     materialize_data = _load_materialize_manifest(materialize_path, errors, warnings, allow_unmaterialized=allow_unmaterialized)
@@ -105,6 +112,30 @@ def repack_patch_workdir(
                 {"manifest": str(materialize_path)},
             )
         )
+
+    if hash_manifest is not None:
+        manifest_path = Path(hash_manifest)
+        try:
+            manifest = load_hash_manifest(manifest_path)
+            comparison = compare_hash_manifest(game_root, manifest)
+            hash_report = comparison.to_dict()
+            if comparison.ok:
+                steps.append(RepackStep("verify_hashes", "Compare game files against hash manifest.", "ready", {"manifest": str(manifest_path), "report": hash_report}))
+            else:
+                errors.append(f"Game files do not match hash manifest: {manifest_path}")
+                steps.append(RepackStep("verify_hashes", "Compare game files against hash manifest.", "blocked", {"manifest": str(manifest_path), "report": hash_report}))
+        except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+            errors.append(f"Failed to compare hash manifest: {exc}")
+            steps.append(RepackStep("verify_hashes", "Compare game files against hash manifest.", "blocked", {"manifest": str(manifest_path), "error": str(exc)}))
+    elif execute and not allow_unverified_execute:
+        errors.append("A hash manifest is required before executing repack. Pass --hash-manifest or --allow-unverified-execute.")
+        steps.append(RepackStep("verify_hashes", "Compare game files against hash manifest.", "blocked", {}))
+    elif require_hash:
+        errors.append("A hash manifest is required. Pass --hash-manifest or remove --require-hash.")
+        steps.append(RepackStep("verify_hashes", "Compare game files against hash manifest.", "blocked", {}))
+    else:
+        warnings.append("No hash manifest was provided; repack execution should verify hashes before writing.")
+        steps.append(RepackStep("verify_hashes", "Compare game files against hash manifest.", "pending", {}))
 
     table_path, table_warnings = _resolve_file_size_table(work_root, file_size_table)
     warnings.extend(table_warnings)
@@ -153,6 +184,7 @@ def repack_patch_workdir(
         idx_file=str(idx_path),
         file_size_table=str(table_path) if table_path is not None else None,
         materialize_manifest=str(materialize_path) if materialize_path is not None else None,
+        hash_report=hash_report,
         backup_plan=backup_plan_data,
         backup_manifest=backup_manifest_data,
         repack=repack_data,

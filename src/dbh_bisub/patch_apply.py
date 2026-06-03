@@ -64,10 +64,13 @@ def apply_patch_workflow(
     materialize_manifest: Path | str | None = None,
     idx_file: Path | str | None = None,
     file_size_table: Path | str | None = None,
+    hash_manifest: Path | str | None = None,
     idx_detroit: Path | str | None = None,
     backup_id: str | None = None,
     execute_repack: bool = False,
     require_repack_plan: bool = True,
+    require_hash: bool = False,
+    allow_unverified_execute: bool = False,
 ) -> PatchApplyResult:
     game_root = Path(game_dir)
     work_root = Path(work_dir)
@@ -118,9 +121,12 @@ def apply_patch_workflow(
         idx_file=idx_file,
         file_size_table=file_size_table,
         materialize_manifest=materialize_manifest,
+        hash_manifest=hash_manifest,
         idx_detroit=idx_detroit,
         backup_id=backup_id,
         execute=execute_repack,
+        require_hash=require_hash,
+        allow_unverified_execute=allow_unverified_execute,
     )
     repacked_data = repacked.to_dict()
     warnings.extend(repacked.warnings)

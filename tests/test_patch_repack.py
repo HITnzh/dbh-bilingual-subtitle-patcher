@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from dbh_bisub.hash_manifest import save_hash_manifest, snapshot_hash_manifest
 from dbh_bisub.idx_archive import IdxResult
 from dbh_bisub.patch_materialize import materialize_patch_package
 from dbh_bisub.patch_package import package_patch_workdir
@@ -61,6 +62,8 @@ class PatchRepackTest(unittest.TestCase):
             work = _make_materialized_workdir(root)
             tool = root / "IDX_Detroit.exe"
             tool.write_text("fake", encoding="utf-8")
+            manifest_path = root / "hashes.json"
+            save_hash_manifest(manifest_path, snapshot_hash_manifest(game_dir, version_id="test"))
 
             def fake_run(plan):
                 self.assertFalse(plan.dry_run)
@@ -71,6 +74,7 @@ class PatchRepackTest(unittest.TestCase):
                     game_dir,
                     work,
                     idx_detroit=tool,
+                    hash_manifest=manifest_path,
                     backup_id="test-backup",
                     execute=True,
                 )
@@ -83,6 +87,20 @@ class PatchRepackTest(unittest.TestCase):
         self.assertEqual(result.repack["returncode"], 0)
         self.assertTrue(backup_manifest_exists)
         self.assertTrue(any(step.id == "create_backup" and step.status == "done" for step in result.steps))
+
+    def test_repack_execute_requires_hash_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            game_dir = _make_game_dir(root)
+            work = _make_materialized_workdir(root)
+            tool = root / "IDX_Detroit.exe"
+            tool.write_text("fake", encoding="utf-8")
+
+            result = repack_patch_workdir(game_dir, work, idx_detroit=tool, execute=True)
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("hash manifest is required" in error.lower() for error in result.errors))
+        self.assertIsNone(result.backup_manifest)
 
     def test_save_patch_repack_result(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

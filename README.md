@@ -64,8 +64,8 @@ python -m dbh_bisub patch-inject --work-dir ".\work\patch" --result ".\work\patc
 python -m dbh_bisub patch-package --work-dir ".\work\patch" --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-package-result.json"
 python -m dbh_bisub patch-stage --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --require-repack-plan --result ".\work\patch\reports\patch-stage-result.json"
 python -m dbh_bisub patch-materialize --work-dir ".\work\patch" --result ".\work\patch\reports\patch-materialize-result.json"
-python -m dbh_bisub patch-repack --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-repack-result.json"
-python -m dbh_bisub patch-apply --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-apply-result.json"
+python -m dbh_bisub patch-repack --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-repack-result.json"
+python -m dbh_bisub patch-apply --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" --work-dir ".\work\patch" --hash-manifest ".\data\steam-local.hashes.json" --idx-detroit "C:\Tools\IDX_Detroit.exe" --result ".\work\patch\reports\patch-apply-result.json"
 ```
 
 JSON output is available for automation:
@@ -356,11 +356,12 @@ Plan the repack step without writing game files:
 python -m dbh_bisub patch-repack `
   --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
   --work-dir ".\work\patch" `
+  --hash-manifest ".\data\steam-local.hashes.json" `
   --idx-detroit "C:\Tools\IDX_Detroit.exe" `
   --result ".\work\patch\reports\patch-repack-result.json"
 ```
 
-`patch-repack` requires a materialize manifest by default and stays in dry-run mode unless `--execute` is passed. With `--execute`, it first creates a backup of the game files this tool may modify, then runs the IDX-Detroit repack command.
+`patch-repack` requires a materialize manifest by default and stays in dry-run mode unless `--execute` is passed. With `--execute`, it requires a passing hash manifest by default, first creates a backup of the game files this tool may modify, then runs the IDX-Detroit repack command.
 
 Use the prepared-workdir apply command to run the local chain in one step:
 
@@ -368,8 +369,9 @@ Use the prepared-workdir apply command to run the local chain in one step:
 python -m dbh_bisub patch-apply `
   --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
   --work-dir ".\work\patch" `
+  --hash-manifest ".\data\steam-local.hashes.json" `
   --idx-detroit "C:\Tools\IDX_Detroit.exe" `
   --result ".\work\patch\reports\patch-apply-result.json"
 ```
 
-`patch-apply` runs `patch-stage`, `patch-materialize`, and `patch-repack`. It defaults to repack dry-run mode. Pass `--execute-repack` only when the staged output and dry-run command have been reviewed; the command then creates a backup before running IDX-Detroit.
+`patch-apply` runs `patch-stage`, `patch-materialize`, and `patch-repack`. It defaults to repack dry-run mode. Pass `--execute-repack` only when the staged output and dry-run command have been reviewed; the command then requires a passing hash manifest, creates a backup, and runs IDX-Detroit. Use `--allow-unverified-execute` only for deliberate local experiments.
