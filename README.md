@@ -16,6 +16,7 @@ Implemented:
 - `restore`: restore files from backups created by this tool.
 - Core merge helpers for bilingual subtitle text.
 - `tools`: inspect external DBH helper tools and print example extractor/packer commands.
+- `discover`: find English and Chinese JSON catalogs in FileParser output.
 - `merge`: merge local English and Chinese JSON text catalogs into bilingual JSON.
 - `lint`: inspect merged catalogs for subtitle overflow and control-token risks.
 
@@ -38,6 +39,7 @@ python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit 
 python -m dbh_bisub backup --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub restore --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 python -m dbh_bisub tools --examples --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
+python -m dbh_bisub discover --output-dir ".\work\fileparser-output"
 python -m dbh_bisub merge --english ".\work\english.json" --chinese ".\work\chinese.json" --output ".\work\bilingual.json" --report ".\work\merge-report.json" --terms ".\data\terminology.csv"
 python -m dbh_bisub lint --catalog ".\work\bilingual.json" --report ".\work\lint-report.json"
 ```
@@ -71,6 +73,14 @@ python -m dbh_bisub tools `
   --examples `
   --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human"
 ```
+
+After running FileParser, inspect the output directory:
+
+```powershell
+python -m dbh_bisub discover --output-dir ".\work\fileparser-output"
+```
+
+The command scans JSON files recursively, loads any catalog-like files it can parse, and recommends English/Chinese merge inputs when their filenames or paths are recognizable.
 
 ## Text Catalogs
 

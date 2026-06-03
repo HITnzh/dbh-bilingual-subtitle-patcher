@@ -8,6 +8,7 @@ from typing import Any
 
 from .backup_restore import DEFAULT_BACKUP_FILES, create_backup, plan_backup, restore_backup
 from .catalog import load_catalog, merge_catalogs, save_catalog
+from .discovery import discover_catalogs
 from .game_files import GameDirectoryReport, inspect_game_dir
 from .patcher import PatchPlan, build_patch_plan
 from .quality import (
@@ -192,6 +193,34 @@ def print_backup_plan(data: dict[str, Any], *, dry_run: bool) -> None:
     print(f"Status: {'ok' if data['ok'] else 'failed'}")
 
 
+def print_discovery_report(data: dict[str, Any]) -> None:
+    print(f"Output directory: {data['output_dir']}")
+    print(f"JSON catalogs: {len(data['files'])}")
+    if data["files"]:
+        print("Catalogs:")
+        for file in data["files"]:
+            count = file["entry_count"] if file["entry_count"] is not None else "unknown"
+            status = "readable" if file["readable"] else "unreadable"
+            print(f"  - {file['relative_path']} [{file['role']}, {status}, {count} entries]")
+            for warning in file["warnings"]:
+                print(f"    Warning: {warning}")
+            for error in file["errors"]:
+                print(f"    Error: {error}")
+    if data["recommended_english"] and data["recommended_chinese"]:
+        print("Recommended merge inputs:")
+        print(f"  English: {data['recommended_english']}")
+        print(f"  Chinese: {data['recommended_chinese']}")
+    if data["warnings"]:
+        print("Warnings:")
+        for warning in data["warnings"]:
+            print(f"  - {warning}")
+    if data["errors"]:
+        print("Errors:")
+        for error in data["errors"]:
+            print(f"  - {error}")
+    print(f"Status: {'ok' if data['ok'] else 'failed'}")
+
+
 def add_game_dir_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--game-dir", required=True, type=Path, help="Detroit: Become Human install directory.")
 
@@ -235,6 +264,10 @@ def build_parser() -> argparse.ArgumentParser:
     tools.add_argument("--object-count", type=int, default=0, help="IDX-Detroit object count; 0 means all.")
     tools.add_argument("--file-size-table", type=Path, help="FileSizeTable path for repack examples.")
     tools.add_argument("--verbose-example", action="store_true", help="Include FileParser verbose flag in examples.")
+
+    discover = subparsers.add_parser("discover", help="Discover language JSON catalogs in a FileParser output directory.")
+    discover.add_argument("--output-dir", required=True, type=Path, help="FileParser output directory.")
+    discover.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     merge = subparsers.add_parser("merge", help="Merge English and Chinese text catalogs into bilingual text.")
     merge.add_argument("--english", required=True, type=Path, help="English catalog JSON.")
@@ -334,6 +367,16 @@ def run_tools(args: argparse.Namespace) -> int:
     return 0 if report.ok else 2
 
 
+def run_discover(args: argparse.Namespace) -> int:
+    report = discover_catalogs(args.output_dir)
+    data = report.to_dict()
+    if args.json:
+        print_json(data)
+    else:
+        print_discovery_report(data)
+    return 0 if report.ok else 2
+
+
 def run_merge(args: argparse.Namespace) -> int:
     try:
         english = load_catalog(args.english)
@@ -398,6 +441,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_restore(args)
     if args.command == "tools":
         return run_tools(args)
+    if args.command == "discover":
+        return run_discover(args)
     if args.command == "merge":
         return run_merge(args)
     if args.command == "lint":
