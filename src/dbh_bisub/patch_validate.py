@@ -7,6 +7,7 @@ from typing import Any
 
 from .catalog import load_catalog
 from .discovery import discover_catalogs
+from .idx_text_inject import has_idx_text_files
 from .prepare import BILINGUAL_CATALOG_JSON, CATALOG_DIR, EXTRACTED_DIR, GENERATED_DIR, REPORTS_DIR
 
 
@@ -132,6 +133,16 @@ def _validate_target(
         _ok(checks, "target_catalog", "Single Chinese target catalog was found.", {"target": chinese_candidates[0]})
         return
     if not chinese_candidates:
+        extracted_dir = root / EXTRACTED_DIR
+        if has_idx_text_files(extracted_dir):
+            text_files = _discover_idx_text_files(extracted_dir)
+            _ok(
+                checks,
+                "target_catalog",
+                "IDX text files were found for text injection.",
+                {"target": str(extracted_dir), "text_files": len(text_files)},
+            )
+            return
         _blocked(checks, errors, "target_catalog", "No Chinese target catalog was found in extracted/.", {"candidates": []})
         return
     _blocked(
@@ -184,6 +195,10 @@ def _discover_file_size_tables(root: Path) -> list[Path]:
         (path for path in root.rglob("*") if path.is_file() and path.name.lower().endswith(".filesizetable")),
         key=lambda path: str(path).lower(),
     )
+
+
+def _discover_idx_text_files(root: Path) -> list[Path]:
+    return sorted((path for path in root.rglob("*.txt") if path.is_file()), key=lambda path: str(path).lower())
 
 
 def _resolve_extracted_path(root: Path, path: Path | str) -> Path:

@@ -56,6 +56,21 @@ class PatchInjectTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("Bilingual catalog does not exist" in error for error in result.errors))
 
+    def test_patch_inject_falls_back_to_idx_text_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work = _make_text_workdir(Path(temp_dir))
+
+            result = patch_inject_workdir(work)
+            patched = (work / "generated" / "BigFile_PC_exp" / "0x00000000.txt").read_text(encoding="utf-8")
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.injection["mode"], "idx_text")
+        self.assertEqual(result.injection["report"]["updated"], 1)
+        self.assertEqual(result.injection["report"]["unchanged"], 1)
+        self.assertIn("a=Hello[n]Ni hao", patched)
+        self.assertIn("b=Use[p]thing", patched)
+        self.assertIn("c=Keep", patched)
+
     def test_save_patch_inject_result(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -79,6 +94,23 @@ def _make_workdir(root: Path) -> Path:
     (work / "catalog" / "bilingual.json").write_text('{"a":"Hello\\n你好"}', encoding="utf-8")
     (work / "extracted" / "ChineseTraditional.json").write_text(
         '{"entries":[{"key":"a","text":"你好","speaker":"Connor"}]}',
+        encoding="utf-8",
+    )
+    return work
+
+
+def _make_text_workdir(root: Path) -> Path:
+    work = root / "work"
+    (work / "catalog").mkdir(parents=True)
+    (work / "extracted" / "BigFile_PC_exp").mkdir(parents=True)
+    (work / "generated").mkdir(parents=True)
+    (work / "reports").mkdir(parents=True)
+    (work / "catalog" / "bilingual.json").write_text(
+        '{"a":"Hello\\nNi hao","b":"Use=thing"}',
+        encoding="utf-8",
+    )
+    (work / "extracted" / "BigFile_PC_exp" / "0x00000000.txt").write_text(
+        "a=Old\r\nb=Use[p]thing\r\nc=Keep\r\nnot-an-entry\r\n",
         encoding="utf-8",
     )
     return work
