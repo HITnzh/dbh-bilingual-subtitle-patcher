@@ -98,7 +98,8 @@ def inject_idx_text_tree(
             totals[key] += file_stats[key]
         if file_stats["updated"] > 0:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text("".join(patched_lines), encoding="utf-8")
+            with output_path.open("w", encoding="utf-8", newline="") as file:
+                file.write("".join(patched_lines))
             file_results.append(
                 IdxTextFilePatch(
                     relative_path=str(relative),

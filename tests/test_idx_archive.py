@@ -3,7 +3,7 @@ import sys
 import tempfile
 import unittest
 
-from dbh_bisub.idx_archive import IdxPlan, default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
+from dbh_bisub.idx_archive import IdxPlan, IdxResult, default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
 
 
 class IdxArchiveTest(unittest.TestCase):
@@ -79,6 +79,22 @@ class IdxArchiveTest(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertIsNone(result.returncode)
+
+    def test_idx_result_rejects_success_returncode_with_failure_marker(self) -> None:
+        plan = IdxPlan(
+            action="repack",
+            idx_file="BigFile_PC.idx",
+            idx_detroit="IDX_Detroit.exe",
+            dry_run=False,
+            command=["IDX_Detroit.exe", "-p", "BigFile_PC.idx", "table.FileSizeTable"],
+            command_text="",
+            errors=[],
+            warnings=[],
+        )
+
+        result = IdxResult(plan=plan, returncode=0, stdout="Null id or file error!", stderr="")
+
+        self.assertFalse(result.ok)
 
     def test_run_repack_executes_from_file_size_table_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

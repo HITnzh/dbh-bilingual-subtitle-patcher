@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 from typing import Any
 
-from .backup_restore import DEFAULT_BACKUP_FILES, create_backup, plan_backup
+from .backup_restore import DEFAULT_BACKUP_FILES, create_backup, plan_backup, restore_backup
 from .constants import PATCH_ARCHIVE
 from .hash_manifest import compare_hash_manifest, load_hash_manifest
 from .idx_archive import default_idx_file, plan_idx_repack, run_idx_plan
@@ -178,11 +178,35 @@ def repack_patch_workdir(
             if not result.ok:
                 errors.append("IDX-Detroit repack failed.")
             steps.append(RepackStep("run_repack", "Run IDX-Detroit repack." if execute else "Review IDX-Detroit repack dry-run.", status, repack_data))
+            restored_after_failure = False
+            if not result.ok and execute and backup_manifest_data is not None:
+                restore_data, restore_errors = _restore_after_failed_execute(game_root, backup.backup_id, backup_plan_data)
+                restored_after_failure = not restore_errors
+                errors.extend(f"Failed to restore after repack failure: {message}" for message in restore_errors)
+                steps.append(
+                    RepackStep(
+                        "restore_after_failure",
+                        "Restore backup after failed repack.",
+                        "done" if restored_after_failure else "blocked",
+                        restore_data,
+                    )
+                )
             if result.ok and execute and table_path is not None:
                 install_data, install_errors = _install_patch_archive(game_root, table_path)
                 if install_errors:
                     errors.extend(install_errors)
                     steps.append(RepackStep("install_patch_archive", "Install repacked patch archive.", "blocked", install_data))
+                    if backup_manifest_data is not None:
+                        restore_data, restore_errors = _restore_after_failed_execute(game_root, backup.backup_id, backup_plan_data)
+                        errors.extend(f"Failed to restore after patch archive install failure: {message}" for message in restore_errors)
+                        steps.append(
+                            RepackStep(
+                                "restore_after_failure",
+                                "Restore backup after patch archive install failure.",
+                                "done" if not restore_errors else "blocked",
+                                restore_data,
+                            )
+                        )
                 else:
                     steps.append(RepackStep("install_patch_archive", "Install repacked patch archive.", "done", install_data))
 
@@ -293,6 +317,11 @@ def _install_patch_archive(game_dir: Path, file_size_table: Path) -> tuple[dict[
     if not source.exists() or not source.is_file():
         errors.append(f"Repacked patch archive was not created: {source}")
         return data, errors
+    source_size = source.stat().st_size
+    data["size"] = source_size
+    if source_size <= 2048:
+        errors.append(f"Repacked patch archive is too small: {source} ({source_size} bytes)")
+        return data, errors
     try:
         _assert_inside(game_dir, target)
     except ValueError as exc:
@@ -307,6 +336,34 @@ def _install_patch_archive(game_dir: Path, file_size_table: Path) -> tuple[dict[
             "sha256": _sha256(target),
         }
     )
+    return data, errors
+
+
+def _restore_after_failed_execute(game_dir: Path, backup_id: str, backup_plan: dict[str, Any] | None) -> tuple[dict[str, Any], list[str]]:
+    data: dict[str, Any] = {"backup_id": backup_id, "removed_missing_files": []}
+    errors: list[str] = []
+    try:
+        manifest = restore_backup(game_dir, backup_id)
+        data["manifest"] = manifest.to_dict()
+    except (FileNotFoundError, ValueError, OSError, json.JSONDecodeError) as exc:
+        errors.append(str(exc))
+        return data, errors
+
+    missing_files = []
+    if isinstance(backup_plan, dict):
+        raw_missing = backup_plan.get("missing_files")
+        if isinstance(raw_missing, list):
+            missing_files = [item for item in raw_missing if isinstance(item, str)]
+    for relative_name in missing_files:
+        target = game_dir / relative_name
+        try:
+            _assert_inside(game_dir, target)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        if target.exists() and target.is_file():
+            target.unlink()
+            data["removed_missing_files"].append(relative_name)
     return data, errors
 
 

@@ -41,7 +41,7 @@ class IdxResult:
 
     @property
     def ok(self) -> bool:
-        return self.plan.ok and (self.returncode in (None, 0))
+        return self.plan.ok and (self.returncode in (None, 0)) and not _has_failure_marker(self.stdout, self.stderr)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -163,3 +163,8 @@ def _execution_cwd(plan: IdxPlan) -> str | None:
     if str(parent) in ("", "."):
         return None
     return str(parent)
+
+
+def _has_failure_marker(stdout: str, stderr: str) -> bool:
+    combined = f"{stdout}\n{stderr}"
+    return "Null id or file error!" in combined

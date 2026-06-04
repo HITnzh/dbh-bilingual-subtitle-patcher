@@ -46,7 +46,7 @@ class PatchApplyTest(unittest.TestCase):
 
             def fake_run(plan):
                 self.assertFalse(plan.dry_run)
-                (work / "extracted" / "BigFile_PC.d30").write_bytes(b"patch archive")
+                (work / "extracted" / "BigFile_PC.d30").write_bytes(b"p" * 4096)
                 return IdxResult(plan=plan, returncode=0, stdout="ok", stderr="")
 
             with patch("dbh_bisub.patch_repack.run_idx_plan", side_effect=fake_run):
@@ -66,7 +66,7 @@ class PatchApplyTest(unittest.TestCase):
         self.assertIsNotNone(result.repack["backup_manifest"])
         self.assertEqual(result.repack["repack"]["returncode"], 0)
         self.assertTrue(backup_manifest_exists)
-        self.assertEqual(patch_archive_installed, b"patch archive")
+        self.assertEqual(patch_archive_installed, b"p" * 4096)
         self.assertTrue(any(step.id == "repack" and step.status == "done" for step in result.steps))
 
     def test_apply_execute_repack_requires_hash_manifest(self) -> None:

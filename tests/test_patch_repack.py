@@ -67,7 +67,7 @@ class PatchRepackTest(unittest.TestCase):
 
             def fake_run(plan):
                 self.assertFalse(plan.dry_run)
-                (work / "extracted" / "BigFile_PC.d30").write_bytes(b"patch archive")
+                (work / "extracted" / "BigFile_PC.d30").write_bytes(b"p" * 4096)
                 return IdxResult(plan=plan, returncode=0, stdout="ok", stderr="")
 
             with patch("dbh_bisub.patch_repack.run_idx_plan", side_effect=fake_run):
@@ -88,7 +88,7 @@ class PatchRepackTest(unittest.TestCase):
         self.assertIsNotNone(result.backup_manifest)
         self.assertEqual(result.repack["returncode"], 0)
         self.assertTrue(backup_manifest_exists)
-        self.assertEqual(patch_archive_installed, b"patch archive")
+        self.assertEqual(patch_archive_installed, b"p" * 4096)
         self.assertTrue(any(step.id == "create_backup" and step.status == "done" for step in result.steps))
         self.assertTrue(any(step.id == "install_patch_archive" and step.status == "done" for step in result.steps))
 
@@ -118,6 +118,37 @@ class PatchRepackTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("patch archive" in error for error in result.errors))
         self.assertTrue(any(step.id == "install_patch_archive" and step.status == "blocked" for step in result.steps))
+        self.assertTrue(any(step.id == "restore_after_failure" and step.status == "done" for step in result.steps))
+
+    def test_repack_execute_restores_when_tool_reports_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            game_dir = _make_game_dir(root)
+            work = _make_materialized_workdir(root)
+            tool = root / "IDX_Detroit.exe"
+            tool.write_text("fake", encoding="utf-8")
+            manifest_path = root / "hashes.json"
+            save_hash_manifest(manifest_path, snapshot_hash_manifest(game_dir, version_id="test"))
+
+            def fake_run(plan):
+                self.assertFalse(plan.dry_run)
+                (game_dir / "BigFile_PC.idx").write_bytes(b"broken")
+                return IdxResult(plan=plan, returncode=0, stdout="Null id or file error!", stderr="")
+
+            with patch("dbh_bisub.patch_repack.run_idx_plan", side_effect=fake_run):
+                result = repack_patch_workdir(
+                    game_dir,
+                    work,
+                    idx_detroit=tool,
+                    hash_manifest=manifest_path,
+                    execute=True,
+                )
+            restored_idx = (game_dir / "BigFile_PC.idx").read_bytes()
+
+        self.assertFalse(result.ok)
+        self.assertEqual(restored_idx, b"idx")
+        self.assertTrue(any("IDX-Detroit repack failed" in error for error in result.errors))
+        self.assertTrue(any(step.id == "restore_after_failure" and step.status == "done" for step in result.steps))
 
     def test_repack_execute_requires_hash_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
