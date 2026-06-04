@@ -24,6 +24,18 @@ class MergeSubtitlesTest(unittest.TestCase):
 
         self.assertIn("Control tokens differ between English and Chinese text.", result.warnings)
 
+    def test_merges_timed_cue_segments_individually(self) -> None:
+        result = merge_bilingual_text(
+            "{*1}It moves. {*2}Two men are down.",
+            "{*1}Ta zai dong. {*2}Liang ge ren dao xia le.",
+        )
+
+        self.assertEqual(
+            result.text,
+            "{*1}It moves.\nTa zai dong. {*2}Two men are down.\nLiang ge ren dao xia le.",
+        )
+        self.assertEqual(result.warnings, [])
+
 
 if __name__ == "__main__":
     unittest.main()
