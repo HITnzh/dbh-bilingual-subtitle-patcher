@@ -32,7 +32,7 @@ class MergeSubtitlesTest(unittest.TestCase):
 
         self.assertEqual(
             result.text,
-            "{*1}It moves.\nTa zai dong. {*2}Two men are down.\nLiang ge ren dao xia le.",
+            "{*1}It moves. / Ta zai dong. {*2}Two men are down. / Liang ge ren dao xia le.",
         )
         self.assertEqual(result.warnings, [])
 

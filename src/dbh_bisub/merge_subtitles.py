@@ -7,6 +7,7 @@ TOKEN_RE = re.compile(
     r"(<[^>\r\n]+>|\{[^}\r\n]+\}|\[[A-Z0-9_:-]+\]|%[0-9.]*[A-Za-z]|\\[nrt])"
 )
 CUE_MARKER_RE = re.compile(r"\{\*[0-9]+\}")
+TIMED_CUE_SEPARATOR = " / "
 
 
 @dataclass(frozen=True)
@@ -88,7 +89,7 @@ def _merge_timed_cue_segment(marker: str, english: str, chinese: str) -> str:
     english_text = english.strip()
     chinese_text = chinese.strip()
     if english_text and chinese_text:
-        return f"{marker}{english_text}\n{chinese_text}"
+        return f"{marker}{english_text}{TIMED_CUE_SEPARATOR}{chinese_text}"
     if english_text:
         return f"{marker}{english_text}"
     if chinese_text:
