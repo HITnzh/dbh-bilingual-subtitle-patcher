@@ -71,6 +71,34 @@ class PatchInjectTest(unittest.TestCase):
         self.assertIn("b=Use[p]thing", patched)
         self.assertIn("c=Keep", patched)
 
+    def test_patch_inject_can_patch_idx_dat_language(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work = _make_text_workdir(Path(temp_dir))
+            (work / "catalog" / "bilingual.json").write_text(
+                '{"HELLO_KEY":"Hello\\nNi hao","USE_KEY":"Use=thing"}',
+                encoding="utf-8",
+            )
+            (work / "extracted" / "BigFile_PC_exp" / "0x00000000.txt").write_text(
+                "HELLO_KEY=Old\r\nUSE_KEY=Use[p]thing\r\n",
+                encoding="utf-8",
+            )
+            (work / "extracted" / "BigFile_PC_exp" / "0x00000000.dat").write_bytes(
+                _language_block("ENG", {"HELLO_KEY": "{S}Old", "USE_KEY": "{S}Use thing"})
+                + _language_block("CHI", {"HELLO_KEY": "{S}Ni hao", "USE_KEY": "{S}Use thing"})
+            )
+
+            result = patch_inject_workdir(work, idx_dat_language="CHT")
+            patched = (work / "generated" / "BigFile_PC_exp" / "0x00000000.dat").read_bytes()
+            text_output_exists = (work / "generated" / "BigFile_PC_exp" / "0x00000000.txt").exists()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.injection["dat_language"]["report"]["language"], "CHI")
+        self.assertEqual(result.injection["dat_language"]["report"]["updated"], 2)
+        self.assertFalse(text_output_exists)
+        self.assertEqual(len(result.injection["dat_language"]["suppressed_text_outputs"]), 1)
+        self.assertIn("{S}Hello\nNi hao".encode("utf-16le"), patched)
+        self.assertIn("{S}Use=thing".encode("utf-16le"), patched)
+
     def test_save_patch_inject_result(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -114,6 +142,16 @@ def _make_text_workdir(root: Path) -> Path:
         encoding="utf-8",
     )
     return work
+
+
+def _language_block(language: str, values: dict[str, str]) -> bytes:
+    block = b"\x01\x03\x00\x00\x00" + language.encode("ascii") + b"\x12\x00\x00\x00"
+    for key, value in values.items():
+        key_bytes = key.encode("ascii")
+        value_bytes = value.encode("utf-16le")
+        block += len(key_bytes).to_bytes(4, "little") + key_bytes
+        block += len(value_bytes).to_bytes(4, "little") + value_bytes
+    return block
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .catalog import TextCatalog, load_catalog
+from .idx_dat_language_patch import patch_idx_dat_language_tree
 
 
 @dataclass(frozen=True)
@@ -59,18 +60,22 @@ class IdxTextInjectionReport:
 class IdxTextInjectionResult:
     output: str
     report: IdxTextInjectionReport
+    dat_language: dict[str, Any] | None = None
 
     @property
     def ok(self) -> bool:
-        return self.report.ok
+        return self.report.ok and (self.dat_language is None or bool(self.dat_language.get("ok")))
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "ok": self.ok,
             "mode": "idx_text",
             "output": self.output,
             "report": self.report.to_dict(),
         }
+        if self.dat_language is not None:
+            data["dat_language"] = self.dat_language
+        return data
 
 
 def inject_idx_text_tree(
@@ -79,6 +84,7 @@ def inject_idx_text_tree(
     extracted_dir: Path | str,
     output_dir: Path | str,
     report: Path | str | None = None,
+    dat_language: str | None = None,
 ) -> IdxTextInjectionResult:
     source_catalog = load_catalog(source)
     extracted_root = Path(extracted_dir)
@@ -131,7 +137,22 @@ def inject_idx_text_tree(
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(json.dumps(injection_report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
 
-    return IdxTextInjectionResult(output=str(generated_root), report=injection_report)
+    dat_language_data = None
+    if dat_language is not None:
+        dat_result = patch_idx_dat_language_tree(
+            source=source,
+            extracted_dir=extracted_root,
+            output_dir=generated_root,
+            language=dat_language,
+            report=_dat_language_report_path(report),
+        )
+        dat_language_data = dat_result.to_dict()
+        dat_language_data["suppressed_text_outputs"] = _suppress_text_outputs_for_patched_dat(
+            generated_root,
+            dat_language_data,
+        )
+
+    return IdxTextInjectionResult(output=str(generated_root), report=injection_report, dat_language=dat_language_data)
 
 
 def has_idx_text_files(path: Path | str) -> bool:
@@ -202,3 +223,37 @@ def _split_newline(line: str) -> tuple[str, str]:
     if line.endswith("\n") or line.endswith("\r"):
         return line[:-1], line[-1]
     return line, ""
+
+
+def _dat_language_report_path(report: Path | str | None) -> Path | None:
+    if report is None:
+        return None
+    report_path = Path(report)
+    return report_path.with_name(f"{report_path.stem}-dat-language{report_path.suffix}")
+
+
+def _suppress_text_outputs_for_patched_dat(generated_root: Path, dat_language_data: dict[str, Any]) -> list[str]:
+    suppressed: list[str] = []
+    report = dat_language_data.get("report", {})
+    files = report.get("files", []) if isinstance(report, dict) else []
+    generated_base = generated_root.resolve()
+
+    for file_data in files:
+        if not isinstance(file_data, dict):
+            continue
+        output = file_data.get("output")
+        if not isinstance(output, str):
+            continue
+
+        dat_output = Path(output).resolve()
+        try:
+            dat_output.relative_to(generated_base)
+        except ValueError:
+            continue
+
+        text_output = dat_output.with_suffix(".txt")
+        if text_output.is_file():
+            text_output.unlink()
+            suppressed.append(str(text_output))
+
+    return suppressed

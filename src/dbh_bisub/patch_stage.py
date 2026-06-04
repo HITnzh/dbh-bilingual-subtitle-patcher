@@ -56,6 +56,7 @@ def stage_patch_workdir(
     output: Path | str | None = None,
     inject_report: Path | str | None = None,
     text_field: str | None = None,
+    idx_dat_language: str | None = None,
     package_dir: Path | str | None = None,
     package_manifest: Path | str | None = None,
     idx_file: Path | str | None = None,
@@ -86,6 +87,7 @@ def stage_patch_workdir(
         output=output,
         report=inject_report,
         text_field=text_field,
+        idx_dat_language=idx_dat_language,
     )
     injection_data = injection.to_dict()
     warnings.extend(injection.warnings)

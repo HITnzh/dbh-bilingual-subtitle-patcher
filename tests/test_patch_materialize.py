@@ -65,6 +65,29 @@ class PatchMaterializeTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("Extracted target file does not exist" in error for error in result.errors))
 
+    def test_materialize_removes_text_sibling_for_dat_only_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            work = root / "work"
+            generated = work / "generated" / "BigFile_PC_exp"
+            extracted = work / "extracted" / "BigFile_PC_exp"
+            generated.mkdir(parents=True)
+            extracted.mkdir(parents=True)
+            (work / "reports").mkdir(parents=True)
+            (generated / "0x00000000.dat").write_bytes(b"patched dat")
+            (extracted / "0x00000000.dat").write_bytes(b"original dat")
+            (extracted / "0x00000000.txt").write_text("stale text", encoding="utf-8")
+            package_patch_workdir(work)
+
+            result = materialize_patch_package(work)
+            text_sibling_exists = (extracted / "0x00000000.txt").exists()
+            target_bytes = (extracted / "0x00000000.dat").read_bytes()
+
+        self.assertTrue(result.ok)
+        self.assertFalse(text_sibling_exists)
+        self.assertEqual(target_bytes, b"patched dat")
+        self.assertEqual(len(result.suppressed_files), 1)
+
     def test_save_patch_materialize_result(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

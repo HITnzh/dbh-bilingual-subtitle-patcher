@@ -341,6 +341,8 @@ python -m dbh_bisub patch-inject `
 
 `patch-inject` reads `catalog/bilingual.json`, auto-selects the single discovered Chinese catalog under `extracted/`, writes the patched catalog under `generated/`, and writes `reports/inject-report.json`. Pass `--target` when more than one Chinese catalog is present.
 
+For IDX-Detroit extracted `.dat` / `.txt` trees, pass `--idx-dat-language CHI` to patch the Traditional Chinese language block directly. Aliases `CHT` and `ZH_HANT` map to `CHI`; `CHS` and `ZH_HANS` map to `SCH`. When this mode writes a patched `.dat`, the generated same-name `.txt` is suppressed so IDX-Detroit does not rebuild the `.dat` from stale text during repack.
+
 Package generated patch files before any repack step:
 
 ```powershell
@@ -359,6 +361,7 @@ After `prepare` and extraction have populated the work directory, run the safe l
 python -m dbh_bisub patch-stage `
   --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
   --work-dir ".\work\patch" `
+  --idx-dat-language CHI `
   --idx-detroit "C:\Tools\IDX_Detroit.exe" `
   --require-repack-plan `
   --result ".\work\patch\reports\patch-stage-result.json"
@@ -374,7 +377,7 @@ python -m dbh_bisub patch-materialize `
   --result ".\work\patch\reports\patch-materialize-result.json"
 ```
 
-`patch-materialize` verifies `reports/package-manifest.json`, checks packaged file SHA-256 hashes, copies each packaged file into the matching path under `extracted/`, and writes `reports/materialize-manifest.json` with original and patched hashes.
+`patch-materialize` verifies `reports/package-manifest.json`, checks packaged file SHA-256 hashes, copies each packaged file into the matching path under `extracted/`, and writes `reports/materialize-manifest.json` with original and patched hashes. For DAT-only packaged files, it removes the same-name target `.txt` so IDX-Detroit uses the patched DAT bytes during repack.
 
 Plan the repack step without writing game files:
 
@@ -395,6 +398,7 @@ Use the prepared-workdir apply command to run the local chain in one step:
 python -m dbh_bisub patch-apply `
   --game-dir "D:\SteamLibrary\steamapps\common\Detroit Become Human" `
   --work-dir ".\work\patch" `
+  --idx-dat-language CHI `
   --hash-manifest ".\data\steam-local.hashes.json" `
   --idx-detroit "C:\Tools\IDX_Detroit.exe" `
   --result ".\work\patch\reports\patch-apply-result.json"

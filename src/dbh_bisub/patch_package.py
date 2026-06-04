@@ -87,6 +87,10 @@ def package_patch_workdir(
         errors.append(f"Generated directory contains no files: {generated_dir}")
         return _result(root, generated_dir, target_dir, manifest_path, [], None, None, None, errors, warnings)
 
+    errors.extend(_prepare_package_dir(root, generated_dir, target_dir))
+    if errors:
+        return _result(root, generated_dir, target_dir, manifest_path, [], None, None, None, errors, warnings)
+
     packaged_files: list[PackageFile] = []
     for source in generated_files:
         relative = source.relative_to(generated_dir)
@@ -226,6 +230,33 @@ def _discover_file_size_tables(root: Path) -> list[Path]:
 
 def _generated_files(generated_dir: Path) -> list[Path]:
     return sorted((path for path in generated_dir.rglob("*") if path.is_file()), key=lambda path: str(path).lower())
+
+
+def _prepare_package_dir(root: Path, generated_dir: Path, target_dir: Path) -> list[str]:
+    root_base = root.resolve()
+    generated_base = generated_dir.resolve()
+    target_base = target_dir.resolve()
+
+    try:
+        target_base.relative_to(root_base)
+    except ValueError:
+        return [f"Refusing to clean package directory outside work directory: {target_dir}"]
+
+    if target_base == root_base:
+        return [f"Refusing to use work directory itself as package directory: {target_dir}"]
+
+    try:
+        target_base.relative_to(generated_base)
+        return [f"Refusing to place package directory inside generated directory: {target_dir}"]
+    except ValueError:
+        pass
+
+    if target_dir.exists() and not target_dir.is_dir():
+        return [f"Package path exists but is not a directory: {target_dir}"]
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return []
 
 
 def _package_file(generated_dir: Path, source: Path, packaged: Path) -> PackageFile:

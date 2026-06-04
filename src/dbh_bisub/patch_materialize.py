@@ -36,6 +36,7 @@ class PatchMaterializeResult:
     target_dir: str
     manifest_path: str | None
     files: list[MaterializedFile]
+    suppressed_files: list[str]
     errors: list[str]
     warnings: list[str]
 
@@ -47,6 +48,7 @@ class PatchMaterializeResult:
             "target_dir": self.target_dir,
             "manifest_path": self.manifest_path,
             "files": [file.to_dict() for file in self.files],
+            "suppressed_files": self.suppressed_files,
             "errors": self.errors,
             "warnings": self.warnings,
         }
@@ -66,24 +68,25 @@ def materialize_patch_package(
     errors: list[str] = []
     warnings: list[str] = []
     files: list[MaterializedFile] = []
+    suppressed_files: list[str] = []
 
     if not root.exists() or not root.is_dir():
         errors.append(f"Work directory does not exist: {root}")
-        return _result(root, package_manifest_path, target_root, manifest_path, files, errors, warnings)
+        return _result(root, package_manifest_path, target_root, manifest_path, files, suppressed_files, errors, warnings)
 
     if not package_manifest_path.exists() or not package_manifest_path.is_file():
         errors.append(f"Package manifest does not exist: {package_manifest_path}")
-        return _result(root, package_manifest_path, target_root, manifest_path, files, errors, warnings)
+        return _result(root, package_manifest_path, target_root, manifest_path, files, suppressed_files, errors, warnings)
 
     if not target_root.exists() or not target_root.is_dir():
         errors.append(f"Target extracted directory does not exist: {target_root}")
-        return _result(root, package_manifest_path, target_root, manifest_path, files, errors, warnings)
+        return _result(root, package_manifest_path, target_root, manifest_path, files, suppressed_files, errors, warnings)
 
     data = json.loads(package_manifest_path.read_text(encoding="utf-8-sig"))
     package_files = data.get("files")
     if not isinstance(package_files, list) or not package_files:
         errors.append(f"Package manifest contains no files: {package_manifest_path}")
-        return _result(root, package_manifest_path, target_root, manifest_path, files, errors, warnings)
+        return _result(root, package_manifest_path, target_root, manifest_path, files, suppressed_files, errors, warnings)
 
     planned: list[tuple[str, Path, Path, str]] = []
     for item in package_files:
@@ -117,8 +120,9 @@ def materialize_patch_package(
         planned.append((relative_path, packaged, target, actual_sha))
 
     if errors:
-        return _result(root, package_manifest_path, target_root, manifest_path, files, errors, warnings)
+        return _result(root, package_manifest_path, target_root, manifest_path, files, suppressed_files, errors, warnings)
 
+    planned_relatives = {relative_path.replace("\\", "/").lower() for relative_path, _, _, _ in planned}
     for relative_path, packaged, target, patched_sha in planned:
         original_sha = _sha256(target)
         original_size = target.stat().st_size
@@ -136,8 +140,9 @@ def materialize_patch_package(
                 changed=original_sha != patched_sha,
             )
         )
+        suppressed_files.extend(_suppress_target_text_sibling(relative_path, target, planned_relatives))
 
-    result = _result(root, package_manifest_path, target_root, manifest_path, files, errors, warnings)
+    result = _result(root, package_manifest_path, target_root, manifest_path, files, suppressed_files, errors, warnings)
     _write_json(manifest_path, result.to_dict())
     return result
 
@@ -152,6 +157,7 @@ def _result(
     target_dir: Path,
     manifest_path: Path | None,
     files: list[MaterializedFile],
+    suppressed_files: list[str],
     errors: list[str],
     warnings: list[str],
 ) -> PatchMaterializeResult:
@@ -162,6 +168,7 @@ def _result(
         target_dir=str(target_dir),
         manifest_path=str(manifest_path) if manifest_path is not None else None,
         files=files,
+        suppressed_files=suppressed_files,
         errors=errors,
         warnings=warnings,
     )
@@ -208,6 +215,23 @@ def _safe_target(root: Path, relative_path: str, errors: list[str]) -> Path | No
         errors.append(f"Refusing to materialize outside extracted directory: {relative_path}")
         return None
     return candidate
+
+
+def _suppress_target_text_sibling(relative_path: str, target: Path, planned_relatives: set[str]) -> list[str]:
+    normalized = relative_path.replace("\\", "/").lower()
+    if not normalized.endswith(".dat"):
+        return []
+
+    sibling_relative = normalized[:-4] + ".txt"
+    if sibling_relative in planned_relatives:
+        return []
+
+    sibling = target.with_suffix(".txt")
+    if not sibling.is_file():
+        return []
+
+    sibling.unlink()
+    return [str(sibling)]
 
 
 def _resolve_path(root: Path, path: Path | str) -> Path:

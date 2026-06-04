@@ -38,6 +38,7 @@ def patch_inject_workdir(
     output: Path | str | None = None,
     report: Path | str | None = None,
     text_field: str | None = None,
+    idx_dat_language: str | None = None,
 ) -> PatchInjectResult:
     root = Path(work_dir)
     errors: list[str] = []
@@ -76,6 +77,7 @@ def patch_inject_workdir(
                     extracted_dir=text_target,
                     output_dir=output_dir,
                     report=report_path,
+                    dat_language=idx_dat_language,
                 )
                 return PatchInjectResult(
                     ok=result.ok,

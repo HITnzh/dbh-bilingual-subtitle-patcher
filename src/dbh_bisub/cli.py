@@ -713,6 +713,7 @@ def build_parser() -> argparse.ArgumentParser:
     patch_inject.add_argument("--report", type=Path, help="Injection report. Defaults to reports/inject-report.json.")
     patch_inject.add_argument("--result", type=Path, help="Optional full patch-inject result JSON.")
     patch_inject.add_argument("--text-field", help="Explicit text field to update inside object entries.")
+    patch_inject.add_argument("--idx-dat-language", help="Also patch this IDX .dat language block, e.g. CHI/CHT or SCH/CHS.")
     patch_inject.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
 
     patch_package = subparsers.add_parser("patch-package", help="Package generated patch files and plan repack.")
@@ -758,6 +759,7 @@ def build_parser() -> argparse.ArgumentParser:
     patch_apply.add_argument("--output", type=Path, help="Patched output catalog. Defaults under generated/.")
     patch_apply.add_argument("--inject-report", type=Path, help="Injection report path. Defaults to reports/inject-report.json.")
     patch_apply.add_argument("--text-field", help="Explicit text field to update inside object entries.")
+    patch_apply.add_argument("--idx-dat-language", help="Also patch this IDX .dat language block, e.g. CHI/CHT or SCH/CHS.")
     patch_apply.add_argument("--package-dir", type=Path, help="Package output directory. Defaults to package/.")
     patch_apply.add_argument("--package-manifest", type=Path, help="Package manifest path. Defaults to reports/package-manifest.json.")
     patch_apply.add_argument("--materialize-target-dir", type=Path, help="Materialize target directory. Defaults to extracted/.")
@@ -782,6 +784,7 @@ def build_parser() -> argparse.ArgumentParser:
     patch_stage.add_argument("--output", type=Path, help="Patched output catalog. Defaults under generated/.")
     patch_stage.add_argument("--inject-report", type=Path, help="Injection report path. Defaults to reports/inject-report.json.")
     patch_stage.add_argument("--text-field", help="Explicit text field to update inside object entries.")
+    patch_stage.add_argument("--idx-dat-language", help="Also patch this IDX .dat language block, e.g. CHI/CHT or SCH/CHS.")
     patch_stage.add_argument("--package-dir", type=Path, help="Package output directory. Defaults to package/.")
     patch_stage.add_argument("--package-manifest", type=Path, help="Package manifest path. Defaults to reports/package-manifest.json.")
     patch_stage.add_argument("--idx-file", type=Path, help="Path to BigFile_PC.idx for repack planning.")
@@ -1065,6 +1068,7 @@ def run_patch_inject(args: argparse.Namespace) -> int:
             output=args.output,
             report=args.report,
             text_field=args.text_field,
+            idx_dat_language=args.idx_dat_language,
         )
         if args.result:
             save_patch_inject_result(args.result, result)
@@ -1167,6 +1171,7 @@ def run_patch_apply(args: argparse.Namespace) -> int:
             output=args.output,
             inject_report=args.inject_report,
             text_field=args.text_field,
+            idx_dat_language=args.idx_dat_language,
             package_dir=args.package_dir,
             package_manifest=args.package_manifest,
             materialize_target_dir=args.materialize_target_dir,
@@ -1205,6 +1210,7 @@ def run_patch_stage(args: argparse.Namespace) -> int:
             output=args.output,
             inject_report=args.inject_report,
             text_field=args.text_field,
+            idx_dat_language=args.idx_dat_language,
             package_dir=args.package_dir,
             package_manifest=args.package_manifest,
             idx_file=args.idx_file,

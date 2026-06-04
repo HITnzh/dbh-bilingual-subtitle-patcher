@@ -77,6 +77,36 @@ class PatchPackageTest(unittest.TestCase):
         self.assertIsNone(result.repack_plan)
         self.assertTrue(any("FileSizeTable" in warning for warning in result.warnings))
 
+    def test_package_cleans_stale_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            work = _make_workdir(root)
+            stale = work / "package" / "stale.txt"
+            stale.parent.mkdir()
+            stale.write_text("old", encoding="utf-8")
+
+            result = package_patch_workdir(work)
+            stale_exists = stale.exists()
+
+        self.assertTrue(result.ok)
+        self.assertFalse(stale_exists)
+        self.assertEqual([file.relative_path for file in result.files], ["ChineseTraditional.json"])
+
+    def test_package_refuses_to_clean_outside_workdir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            work = _make_workdir(root)
+            outside = root / "outside-package"
+            outside.mkdir()
+            (outside / "keep.txt").write_text("old", encoding="utf-8")
+
+            result = package_patch_workdir(work, package_dir=outside)
+            outside_file_exists = (outside / "keep.txt").exists()
+
+        self.assertFalse(result.ok)
+        self.assertTrue(outside_file_exists)
+        self.assertTrue(any("outside work directory" in error for error in result.errors))
+
     def test_save_patch_package_result(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
