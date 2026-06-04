@@ -1,8 +1,9 @@
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
-from dbh_bisub.idx_archive import default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
+from dbh_bisub.idx_archive import IdxPlan, default_idx_file, plan_idx_extract, plan_idx_repack, run_idx_plan
 
 
 class IdxArchiveTest(unittest.TestCase):
@@ -78,6 +79,37 @@ class IdxArchiveTest(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertIsNone(result.returncode)
+
+    def test_run_repack_executes_from_file_size_table_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            table_dir = root / "work"
+            table_dir.mkdir()
+            table = table_dir / "BigFile_PC.FileSizeTable"
+            table.write_text("table", encoding="utf-8")
+            script = root / "write_cwd.py"
+            script.write_text(
+                "from pathlib import Path\n"
+                "import os\n"
+                "Path('cwd.txt').write_text(os.getcwd(), encoding='utf-8')\n",
+                encoding="utf-8",
+            )
+            plan = IdxPlan(
+                action="repack",
+                idx_file=str(root / "BigFile_PC.idx"),
+                idx_detroit=sys.executable,
+                dry_run=False,
+                command=[sys.executable, str(script), str(root / "BigFile_PC.idx"), str(table)],
+                command_text="",
+                errors=[],
+                warnings=[],
+            )
+
+            result = run_idx_plan(plan)
+            cwd = (table_dir / "cwd.txt").read_text(encoding="utf-8")
+
+        self.assertTrue(result.ok)
+        self.assertEqual(Path(cwd), table_dir)
 
 
 if __name__ == "__main__":

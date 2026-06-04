@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 from pathlib import Path
+import shutil
 from typing import Any
 
 from .backup_restore import DEFAULT_BACKUP_FILES, create_backup, plan_backup
+from .constants import PATCH_ARCHIVE
 from .hash_manifest import compare_hash_manifest, load_hash_manifest
 from .idx_archive import default_idx_file, plan_idx_repack, run_idx_plan
 from .patch_materialize import MATERIALIZE_MANIFEST_JSON
@@ -175,6 +178,13 @@ def repack_patch_workdir(
             if not result.ok:
                 errors.append("IDX-Detroit repack failed.")
             steps.append(RepackStep("run_repack", "Run IDX-Detroit repack." if execute else "Review IDX-Detroit repack dry-run.", status, repack_data))
+            if result.ok and execute and table_path is not None:
+                install_data, install_errors = _install_patch_archive(game_root, table_path)
+                if install_errors:
+                    errors.extend(install_errors)
+                    steps.append(RepackStep("install_patch_archive", "Install repacked patch archive.", "blocked", install_data))
+                else:
+                    steps.append(RepackStep("install_patch_archive", "Install repacked patch archive.", "done", install_data))
 
     return PatchRepackResult(
         ok=not errors,
@@ -270,3 +280,46 @@ def _resolve_path(root: Path, path: Path | str) -> Path:
     if candidate.exists():
         return candidate
     return root / candidate
+
+
+def _install_patch_archive(game_dir: Path, file_size_table: Path) -> tuple[dict[str, Any], list[str]]:
+    source = file_size_table.parent / PATCH_ARCHIVE
+    target = game_dir / PATCH_ARCHIVE
+    data: dict[str, Any] = {
+        "source": str(source),
+        "target": str(target),
+    }
+    errors: list[str] = []
+    if not source.exists() or not source.is_file():
+        errors.append(f"Repacked patch archive was not created: {source}")
+        return data, errors
+    try:
+        _assert_inside(game_dir, target)
+    except ValueError as exc:
+        errors.append(str(exc))
+        return data, errors
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    data.update(
+        {
+            "size": target.stat().st_size,
+            "sha256": _sha256(target),
+        }
+    )
+    return data, errors
+
+
+def _assert_inside(root: Path, target: Path) -> None:
+    resolved_root = root.resolve()
+    resolved_target = target.resolve()
+    if resolved_target != resolved_root and resolved_root not in resolved_target.parents:
+        raise ValueError(f"Refusing to install outside game directory: {target}")
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

@@ -134,7 +134,7 @@ def run_idx_plan(plan: IdxPlan) -> IdxResult:
         return IdxResult(plan=plan, returncode=None, stdout="", stderr="")
 
     try:
-        completed = subprocess.run(plan.command, check=False, capture_output=True, text=True)
+        completed = subprocess.run(plan.command, check=False, capture_output=True, text=True, cwd=_execution_cwd(plan))
     except OSError as exc:
         return IdxResult(plan=plan, returncode=-1, stdout="", stderr=str(exc))
     return IdxResult(
@@ -153,3 +153,13 @@ def _validate_idx_file(idx_path: Path, errors: list[str]) -> None:
 def _validate_non_negative(name: str, value: int, errors: list[str]) -> None:
     if value < 0:
         errors.append(f"{name} must be non-negative.")
+
+
+def _execution_cwd(plan: IdxPlan) -> str | None:
+    if plan.action != "repack" or len(plan.command) < 4:
+        return None
+    table_path = Path(plan.command[-1])
+    parent = table_path.parent
+    if str(parent) in ("", "."):
+        return None
+    return str(parent)
