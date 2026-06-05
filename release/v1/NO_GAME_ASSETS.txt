@@ -1,0 +1,5 @@
+This V1 release package intentionally contains no Detroit: Become Human game archives, DAT files, FileParser JSON output, or official subtitle text.
+
+The installer reads the user's own local game installation and generates the bilingual subtitle patch on that machine.
+
+Do not redistribute generated BigFile_PC.d30, extracted BigFile_PC_exp files, or merged bilingual catalogs that contain official game text.

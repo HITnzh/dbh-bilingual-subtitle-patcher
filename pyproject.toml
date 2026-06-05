@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dbh-bilingual-subtitle-patcher"
-version = "0.1.0"
-description = "Local patcher skeleton for Detroit: Become Human bilingual subtitles."
+version = "1.0.0"
+description = "Local patcher for Detroit: Become Human bilingual subtitles."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
