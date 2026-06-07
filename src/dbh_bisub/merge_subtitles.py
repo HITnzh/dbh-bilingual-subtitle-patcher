@@ -9,6 +9,7 @@ TOKEN_RE = re.compile(
 CUE_MARKER_RE = re.compile(r"\{\*[0-9]+\}")
 CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 DBH_LINE_BREAK = "{B}"
+TIMED_CUE_SEPARATOR = " / "
 
 
 @dataclass(frozen=True)
@@ -90,12 +91,20 @@ def _merge_timed_cue_segment(marker: str, english: str, chinese: str) -> str:
     english_text = english.strip()
     chinese_text = chinese.strip()
     if english_text and chinese_text:
-        return f"{marker}{_merge_visual_pair(english_text, chinese_text)}"
+        return f"{marker}{_merge_inline_pair(english_text, chinese_text)}"
     if english_text:
         return f"{marker}{_compact_visual_breaks(english_text)}"
     if chinese_text:
         return f"{marker}{_compact_visual_breaks(chinese_text)}"
     return marker
+
+
+def _merge_inline_pair(english: str, chinese: str) -> str:
+    english_text = _compact_visual_breaks(english)
+    chinese_text = _compact_visual_breaks(chinese)
+    if english_text and chinese_text:
+        return f"{english_text}{TIMED_CUE_SEPARATOR}{chinese_text}"
+    return english_text or chinese_text
 
 
 def _merge_visual_pair(english: str, chinese: str) -> str:

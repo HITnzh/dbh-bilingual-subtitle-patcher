@@ -32,7 +32,7 @@ class MergeSubtitlesTest(unittest.TestCase):
 
         self.assertEqual(
             result.text,
-            "{*1}It moves.{B}Ta zai dong. {*2}Two men are down.{B}Liang ge ren dao xia le.",
+            "{*1}It moves. / Ta zai dong. {*2}Two men are down. / Liang ge ren dao xia le.",
         )
         self.assertEqual(result.warnings, [])
 
@@ -47,7 +47,7 @@ class MergeSubtitlesTest(unittest.TestCase):
             "{*1}要自由！{B}要自由！{B}要自由！",
         )
 
-        self.assertEqual(result.text, "{*1}Liberty!{B}要自由！")
+        self.assertEqual(result.text, "{*1}Liberty! / 要自由！")
 
     def test_removes_chinese_lines_from_english_source(self) -> None:
         result = merge_bilingual_text("Hello\n你好", "你好")
@@ -65,7 +65,7 @@ class MergeSubtitlesTest(unittest.TestCase):
             "{*1}艾伦队长？{*2}我是康纳。",
         )
 
-        self.assertEqual(result.text, "{*1}Captain Allen?{B}艾伦队长？ {*2}My name is Connor.{B}我是康纳。")
+        self.assertEqual(result.text, "{*1}Captain Allen? / 艾伦队长？ {*2}My name is Connor. / 我是康纳。")
 
     def test_cleaning_keeps_visual_breaks_for_later_deduplication(self) -> None:
         result = merge_bilingual_text(
@@ -73,7 +73,7 @@ class MergeSubtitlesTest(unittest.TestCase):
             "{*1}要自由！{*2}要自由！",
         )
 
-        self.assertEqual(result.text, "{*1}Liberty!{B}要自由！ {*2}Liberty!{B}要自由！")
+        self.assertEqual(result.text, "{*1}Liberty! / 要自由！ {*2}Liberty! / 要自由！")
 
 
 if __name__ == "__main__":

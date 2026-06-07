@@ -3,7 +3,7 @@
 ## What This Release Does
 
 - Builds bilingual subtitles from the user's own local Detroit: Become Human files.
-- Merges official English subtitles with official Simplified Chinese subtitles as two in-game visual lines.
+- Merges official English subtitles with official Simplified Chinese subtitles. Timed dialogue cues use `English / Simplified Chinese` on one line to avoid stacked-subtitle desync; static text can still use two visual lines.
 - Installs the merged text into the `SCH` / Simplified Chinese language block.
 - Creates a timestamped backup before writing `BigFile_PC.idx` and `BigFile_PC.d30`.
 - Includes a restore script for the latest or a specific backup.
@@ -20,7 +20,7 @@
 The verified target line after install:
 
 ```text
-SCH: Captain Allen?{B}艾伦队长？ My name is Connor.{B}我是康纳。
+SCH: Captain Allen? / 艾伦队长？ My name is Connor. / 我是康纳。
 ```
 
 The Traditional Chinese language block may also contain an English/Traditional Chinese variant if the user installed it separately. V1's recommended route is `SCH`.

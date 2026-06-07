@@ -419,7 +419,7 @@ def _replacement_chinese_text(text: str) -> str:
 
 
 def _replacement_english_text(text: str) -> str:
-    return " ".join(part for part in _visual_parts(text) if not CJK_RE.search(part))
+    return CJK_RE.sub(" ", _strip_control_tokens(text))
 
 
 def _visual_parts(text: str) -> list[str]:
