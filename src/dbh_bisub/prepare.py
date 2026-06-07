@@ -104,6 +104,7 @@ def prepare_patch_workdir(
         require_hash=require_hash,
         file_parser=file_parser,
         idx_detroit=idx_detroit,
+        force=force,
     )
     if plan.errors:
         errors.extend(plan.errors)

@@ -82,6 +82,22 @@ class PrepareTest(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertTrue(staged_catalog_exists)
 
+    def test_prepare_force_allows_existing_patch_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            game_dir = root / "game"
+            work_dir = root / "work"
+            game_dir.mkdir()
+            (game_dir / "BigFile_PC.idx").write_bytes(b"idx")
+            (game_dir / "BigFile_PC.d00").write_bytes(b"archive")
+            (game_dir / "BigFile_PC.d30").write_bytes(b"patch")
+            catalog = root / "bilingual.json"
+            catalog.write_text('{"entries":[{"key":"a","text":"Hello"}]}', encoding="utf-8")
+
+            result = prepare_patch_workdir(game_dir, catalog=catalog, work_dir=work_dir, force=True)
+
+        self.assertTrue(result.ok)
+
     def test_prepare_blocks_on_hash_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

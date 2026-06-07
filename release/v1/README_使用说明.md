@@ -3,7 +3,8 @@
 这是《Detroit: Become Human》PC 版的本地生成型双语字幕补丁工具包。V1 目标效果是：
 
 ```text
-英文字幕 / 简体中文字幕
+英文字幕
+简体中文字幕
 ```
 
 安装完成后，请在游戏内选择 **简体中文 / SCH** 字幕语言。
@@ -57,7 +58,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 1. 检查游戏没有运行。
 2. 用 FileParser 从你的本地游戏文件提取英文和简体中文字幕。
-3. 合并为 `英文 / 简中` 双语字幕。
+3. 合并为 `英文上一行 + 简中下一行` 双语字幕。
 4. 用 IDX-Detroit 提取 archive `1016`。
 5. 写入 `SCH` 简体中文语言块。
 6. 创建安装前备份。

@@ -6,7 +6,7 @@ from dbh_bisub.quality import inspect_catalog_quality
 
 class QualityTest(unittest.TestCase):
     def test_clean_catalog(self) -> None:
-        catalog = catalog_from_json({"a": "Hello\n你好"})
+        catalog = catalog_from_json({"a": "Hello{B}你好"})
 
         report = inspect_catalog_quality(catalog)
 
@@ -36,6 +36,13 @@ class QualityTest(unittest.TestCase):
         report = inspect_catalog_quality(catalog)
 
         self.assertEqual(report.issues_by_code["control_tokens_differ"], 1)
+
+    def test_ignores_timed_cue_tokens_between_visual_lines(self) -> None:
+        catalog = catalog_from_json({"a": "{*1}Hello{B}Ni hao"})
+
+        report = inspect_catalog_quality(catalog)
+
+        self.assertNotIn("control_tokens_differ", report.issues_by_code)
 
 
 if __name__ == "__main__":

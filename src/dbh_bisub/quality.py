@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from .catalog import TextCatalog
-from .merge_subtitles import extract_control_tokens, normalize_line
+from .merge_subtitles import DBH_LINE_BREAK, extract_control_tokens, normalize_line
 
 DEFAULT_MAX_LINES = 2
 DEFAULT_MAX_LINE_CHARS = 84
@@ -73,7 +73,7 @@ def inspect_catalog_quality(
 
     for key, entry in catalog.entries.items():
         text = normalize_line(entry.text)
-        lines = text.split("\n") if text else []
+        lines = split_visual_lines(text)
         line_lengths = [len(line) for line in lines]
         total_chars = sum(line_lengths)
         longest_line = max(line_lengths, default=0)
@@ -140,10 +140,10 @@ def inspect_catalog_quality(
 def _inspect_control_tokens(key: str, lines: list[str]) -> list[QualityIssue]:
     if len(lines) < 2:
         return []
-    first_line_tokens = extract_control_tokens(lines[0])
+    first_line_tokens = _layout_control_tokens(lines[0])
     issues: list[QualityIssue] = []
     for index, line in enumerate(lines[1:], start=2):
-        tokens = extract_control_tokens(line)
+        tokens = _layout_control_tokens(line)
         if tokens != first_line_tokens:
             issues.append(
                 QualityIssue(
@@ -155,3 +155,14 @@ def _inspect_control_tokens(key: str, lines: list[str]) -> list[QualityIssue]:
                 )
             )
     return issues
+
+
+def _layout_control_tokens(line: str) -> list[str]:
+    return [token for token in extract_control_tokens(line) if not token.startswith("{*")]
+
+
+def split_visual_lines(text: str) -> list[str]:
+    normalized = normalize_line(text)
+    if not normalized:
+        return []
+    return normalized.replace("\n", DBH_LINE_BREAK).split(DBH_LINE_BREAK)

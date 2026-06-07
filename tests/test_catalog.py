@@ -26,7 +26,7 @@ class CatalogTest(unittest.TestCase):
 
         result = merge_catalogs(english, chinese)
 
-        self.assertEqual(result.catalog.get_text("a"), "{PLAYER} Hello\n你好")
+        self.assertEqual(result.catalog.get_text("a"), "{PLAYER} Hello{B}你好")
         self.assertEqual(result.catalog.get_text("b"), "Only English")
         self.assertEqual(result.catalog.get_text("c"), "只有中文")
         self.assertEqual(result.report.missing_chinese, 1)

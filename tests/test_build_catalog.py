@@ -30,7 +30,7 @@ class BuildCatalogTest(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.english.endswith("English.json"), True)
-        self.assertEqual(catalog_data["entries"][0]["text"], "Hello\n你好")
+        self.assertEqual(catalog_data["entries"][0]["text"], "Hello{B}你好")
         self.assertTrue(merge_report_exists)
         self.assertTrue(lint_report_exists)
 
@@ -49,7 +49,7 @@ class BuildCatalogTest(unittest.TestCase):
             catalog_data = json.loads(output.read_text(encoding="utf-8"))
 
         self.assertTrue(result.ok)
-        self.assertEqual(catalog_data["entries"][0]["text"], "Connor\nCONNOR")
+        self.assertEqual(catalog_data["entries"][0]["text"], "Connor{B}CONNOR")
         self.assertEqual(result.merge["terminology"]["replacements"], 1)
 
     def test_build_requires_inputs(self) -> None:

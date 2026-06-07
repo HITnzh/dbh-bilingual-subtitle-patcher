@@ -215,6 +215,13 @@ def _patch_dat_language_file(
 
 
 def _language_ranges(data: bytes) -> dict[str, tuple[int, int]]:
+    ranges = _marker_language_ranges(data)
+    for code, value_range in _record_header_language_ranges(data).items():
+        ranges.setdefault(code, value_range)
+    return ranges
+
+
+def _marker_language_ranges(data: bytes) -> dict[str, tuple[int, int]]:
     markers: list[tuple[int, int, str]] = []
     for code in LANGUAGE_CODES:
         marker = LANGUAGE_MARKER_PREFIX + code.encode("ascii") + LANGUAGE_MARKER_SUFFIX
@@ -231,6 +238,34 @@ def _language_ranges(data: bytes) -> dict[str, tuple[int, int]]:
     for index, (_, marker_end, code) in enumerate(markers):
         next_start = markers[index + 1][0] if index + 1 < len(markers) else len(data)
         ranges[code] = (marker_end, next_start)
+    return ranges
+
+
+def _record_header_language_ranges(data: bytes) -> dict[str, tuple[int, int]]:
+    headers: list[tuple[int, int, str]] = []
+    position = 0
+    while position < len(data):
+        record = _read_record(data, position)
+        if record is None:
+            position += 1
+            continue
+
+        key, _, next_position = record
+        if key in LANGUAGE_CODES:
+            headers.append((position, next_position, key))
+        position = next_position
+
+    # This layout appears as many language-code records followed by normal
+    # localization records. Requiring at least two headers avoids treating an
+    # accidental short key in arbitrary DAT data as a whole language section.
+    if len(headers) < 2:
+        return {}
+
+    ranges: dict[str, tuple[int, int]] = {}
+    for index, (_, header_end, code) in enumerate(headers):
+        next_start = headers[index + 1][0] if index + 1 < len(headers) else len(data)
+        if header_end < next_start:
+            ranges[code] = (header_end, next_start)
     return ranges
 
 

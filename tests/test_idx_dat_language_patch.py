@@ -75,6 +75,37 @@ class IdxDatLanguagePatchTest(unittest.TestCase):
         self.assertIn(b"\xAA\xBB\xCC\xDD", patched)
         self.assertIn("{S}Second / Di er".encode("utf-16le"), patched)
 
+    def test_patches_language_record_header_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "bilingual.json"
+            extracted = root / "extracted" / "BigFile_PC_exp"
+            output = root / "generated"
+            extracted.mkdir(parents=True)
+            source.write_text(json.dumps({"HELLO_KEY": "Hello{B}你好"}), encoding="utf-8")
+            (extracted / "0x00000000.dat").write_bytes(
+                _record("ENG", "header")
+                + _record("HELLO_KEY", "{S}Hello")
+                + b"\xAA\xBB"
+                + _record("SCH", "header")
+                + b"\xCC\xDD"
+                + _record("HELLO_KEY", "{S}你好")
+            )
+
+            result = patch_idx_dat_language_tree(
+                source=source,
+                extracted_dir=root / "extracted",
+                output_dir=output,
+                language="SCH",
+            )
+            patched = (output / "BigFile_PC_exp" / "0x00000000.dat").read_bytes()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.report.updated, 1)
+        self.assertIn("{S}Hello{B}你好".encode("utf-16le"), patched)
+        self.assertIn("{S}Hello".encode("utf-16le"), patched)
+        self.assertIn(b"\xCC\xDD", patched)
+
 
 def _language_block(language: str, values: dict[str, str], gap: bytes = b"") -> bytes:
     block = b"\x01\x03\x00\x00\x00" + language.encode("ascii") + b"\x12\x00\x00\x00"
@@ -86,6 +117,12 @@ def _language_block(language: str, values: dict[str, str], gap: bytes = b"") -> 
         block += len(key_bytes).to_bytes(4, "little") + key_bytes
         block += len(value_bytes).to_bytes(4, "little") + value_bytes
     return block
+
+
+def _record(key: str, value: str) -> bytes:
+    key_bytes = key.encode("ascii")
+    value_bytes = value.encode("utf-16le")
+    return len(key_bytes).to_bytes(4, "little") + key_bytes + len(value_bytes).to_bytes(4, "little") + value_bytes
 
 
 if __name__ == "__main__":

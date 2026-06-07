@@ -7,7 +7,8 @@ TOKEN_RE = re.compile(
     r"(<[^>\r\n]+>|\{[^}\r\n]+\}|\[[A-Z0-9_:-]+\]|%[0-9.]*[A-Za-z]|\\[nrt])"
 )
 CUE_MARKER_RE = re.compile(r"\{\*[0-9]+\}")
-TIMED_CUE_SEPARATOR = " / "
+CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
+DBH_LINE_BREAK = "{B}"
 
 
 @dataclass(frozen=True)
@@ -27,8 +28,8 @@ def extract_control_tokens(text: str) -> list[str]:
 
 
 def merge_bilingual_text(english: str | None, chinese: str | None) -> MergeResult:
-    english_line = normalize_line(english)
-    chinese_line = normalize_line(chinese)
+    english_line = _clean_english_source(normalize_line(english))
+    chinese_line = _clean_chinese_source(normalize_line(chinese))
     warnings: list[str] = []
 
     if not english_line and not chinese_line:
@@ -49,7 +50,7 @@ def merge_bilingual_text(english: str | None, chinese: str | None) -> MergeResul
     if segmented_text is not None:
         return MergeResult(segmented_text, warnings)
 
-    return MergeResult(f"{english_line}\n{chinese_line}", warnings)
+    return MergeResult(_merge_visual_pair(english_line, chinese_line), warnings)
 
 
 def _merge_timed_cue_segments(english: str, chinese: str) -> str | None:
@@ -89,9 +90,51 @@ def _merge_timed_cue_segment(marker: str, english: str, chinese: str) -> str:
     english_text = english.strip()
     chinese_text = chinese.strip()
     if english_text and chinese_text:
-        return f"{marker}{english_text}{TIMED_CUE_SEPARATOR}{chinese_text}"
+        return f"{marker}{_merge_visual_pair(english_text, chinese_text)}"
     if english_text:
-        return f"{marker}{english_text}"
+        return f"{marker}{_compact_visual_breaks(english_text)}"
     if chinese_text:
-        return f"{marker}{chinese_text}"
+        return f"{marker}{_compact_visual_breaks(chinese_text)}"
     return marker
+
+
+def _merge_visual_pair(english: str, chinese: str) -> str:
+    english_text = _compact_visual_breaks(english)
+    chinese_text = _compact_visual_breaks(chinese)
+    if english_text and chinese_text:
+        return f"{english_text}{DBH_LINE_BREAK}{chinese_text}"
+    return english_text or chinese_text
+
+
+def _compact_visual_breaks(text: str) -> str:
+    normalized = normalize_line(text)
+    parts = []
+    for line in normalized.replace("\n", DBH_LINE_BREAK).split(DBH_LINE_BREAK):
+        line = line.strip()
+        if line and (not parts or parts[-1] != line):
+            parts.append(line)
+    return " ".join(parts)
+
+
+def _clean_english_source(text: str) -> str:
+    return _keep_visual_lines_by_cjk(text, keep_cjk=False)
+
+
+def _clean_chinese_source(text: str) -> str:
+    return _keep_visual_lines_by_cjk(text, keep_cjk=True)
+
+
+def _keep_visual_lines_by_cjk(text: str, *, keep_cjk: bool) -> str:
+    parts = _visual_parts(text)
+    if len(parts) < 2:
+        return text
+
+    preferred = [part for part in parts if bool(CJK_RE.search(part)) == keep_cjk]
+    if not preferred or len(preferred) == len(parts):
+        return text
+    return DBH_LINE_BREAK.join(preferred)
+
+
+def _visual_parts(text: str) -> list[str]:
+    normalized = normalize_line(text)
+    return [part.strip() for part in normalized.replace("\n", DBH_LINE_BREAK).split(DBH_LINE_BREAK) if part.strip()]
