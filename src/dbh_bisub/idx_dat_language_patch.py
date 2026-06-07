@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from .catalog import TextCatalog, load_catalog
+from .merge_subtitles import DBH_LINE_BREAK, extract_control_tokens, normalize_line
 
 LANGUAGE_MARKER_PREFIX = b"\x01\x03\x00\x00\x00"
 LANGUAGE_MARKER_SUFFIX = b"\x12\x00\x00\x00"
@@ -44,6 +46,8 @@ LANGUAGE_CODES = (
     "ARA",
     "SCH",
 )
+CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
+LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z']+")
 
 
 @dataclass(frozen=True)
@@ -199,6 +203,9 @@ def _patch_dat_language_file(
     ranges = _language_ranges(data)
     target_range = ranges.get(language)
     if target_range is None:
+        inferred = _patch_inferred_language_file(data, source_catalog, language)
+        if inferred is not None:
+            return inferred
         return data, {
             "language_found": False,
             "target_entries": 0,
@@ -210,6 +217,48 @@ def _patch_dat_language_file(
     block_start, block_end = target_range
     block, stats = _patch_language_block(data[block_start:block_end], source_catalog)
     patched = data[:block_start] + block + data[block_end:]
+    stats["language_found"] = True
+    return patched, stats
+
+
+def _patch_inferred_language_file(
+    data: bytes,
+    source_catalog: TextCatalog,
+    language: str,
+) -> tuple[bytes, dict[str, int | bool]] | None:
+    if language != "SCH":
+        return None
+
+    groups = _record_language_groups(data)
+    target_groups = [
+        group
+        for group in groups
+        if _group_simplified_score(group, source_catalog) >= 0.85
+        and _group_latin_overlap_score(group, source_catalog) <= 0.35
+    ]
+    if not target_groups:
+        return None
+
+    stats = {"target_entries": 0, "updated": 0, "unchanged": 0, "missing_in_source": 0}
+    replacements: list[tuple[int, int, bytes]] = []
+    for group in target_groups:
+        for position, key, value, next_position in group:
+            stats["target_entries"] += 1
+            replacement = source_catalog.get_text(key)
+            if not replacement:
+                stats["missing_in_source"] += 1
+                continue
+            replacement = _preserve_state_marker(value, replacement)
+            if replacement == value:
+                stats["unchanged"] += 1
+            else:
+                stats["updated"] += 1
+                replacements.append((position, next_position, _encode_record(key, replacement)))
+
+    if replacements:
+        patched = _apply_replacements(data, replacements)
+    else:
+        patched = data
     stats["language_found"] = True
     return patched, stats
 
@@ -299,14 +348,107 @@ def _patch_language_block(block: bytes, source_catalog: TextCatalog) -> tuple[by
     if not replacements:
         return block, stats
 
+    return _apply_replacements(block, replacements), stats
+
+
+def _apply_replacements(data: bytes, replacements: list[tuple[int, int, bytes]]) -> bytes:
     output = bytearray()
     previous_end = 0
     for start, end, encoded in replacements:
-        output.extend(block[previous_end:start])
+        output.extend(data[previous_end:start])
         output.extend(encoded)
         previous_end = end
-    output.extend(block[previous_end:])
-    return bytes(output), stats
+    output.extend(data[previous_end:])
+    return bytes(output)
+
+
+def _record_language_groups(data: bytes) -> list[list[tuple[int, str, str, int]]]:
+    records: list[tuple[int, str, str, int]] = []
+    position = 0
+    while position < len(data):
+        record = _read_record(data, position)
+        if record is None:
+            position += 1
+            continue
+
+        key, value, next_position = record
+        records.append((position, key, value, next_position))
+        position = next_position
+
+    if len(records) < 2:
+        return []
+
+    first_key = records[0][1]
+    groups: list[list[tuple[int, str, str, int]]] = []
+    current: list[tuple[int, str, str, int]] = []
+    for record in records:
+        if current and record[1] == first_key:
+            groups.append(current)
+            current = []
+        current.append(record)
+    if current:
+        groups.append(current)
+
+    if len(groups) < 2:
+        return []
+    return groups
+
+
+def _group_simplified_score(group: list[tuple[int, str, str, int]], source_catalog: TextCatalog) -> float:
+    scores = []
+    for _, key, value, _ in group:
+        replacement = source_catalog.get_text(key)
+        if not replacement:
+            continue
+        scores.append(_cjk_overlap_score(value, _replacement_chinese_text(replacement)))
+    return sum(scores) / len(scores) if scores else 0.0
+
+
+def _group_latin_overlap_score(group: list[tuple[int, str, str, int]], source_catalog: TextCatalog) -> float:
+    scores = []
+    for _, key, value, _ in group:
+        replacement = source_catalog.get_text(key)
+        if not replacement:
+            continue
+        scores.append(_latin_overlap_score(value, _replacement_english_text(replacement)))
+    return sum(scores) / len(scores) if scores else 0.0
+
+
+def _replacement_chinese_text(text: str) -> str:
+    return "".join(part for part in _visual_parts(text) if CJK_RE.search(part))
+
+
+def _replacement_english_text(text: str) -> str:
+    return " ".join(part for part in _visual_parts(text) if not CJK_RE.search(part))
+
+
+def _visual_parts(text: str) -> list[str]:
+    normalized = normalize_line(text)
+    return [part.strip() for part in normalized.replace("\n", DBH_LINE_BREAK).split(DBH_LINE_BREAK) if part.strip()]
+
+
+def _cjk_overlap_score(value: str, expected: str) -> float:
+    actual_cjk = "".join(CJK_RE.findall(_strip_control_tokens(value)))
+    expected_cjk = "".join(CJK_RE.findall(_strip_control_tokens(expected)))
+    if not actual_cjk or not expected_cjk:
+        return 0.0
+    matches = sum(1 for char in actual_cjk if char in expected_cjk)
+    return matches / len(actual_cjk)
+
+
+def _latin_overlap_score(value: str, expected: str) -> float:
+    actual_words = {word.lower() for word in LATIN_WORD_RE.findall(_strip_control_tokens(value))}
+    expected_words = {word.lower() for word in LATIN_WORD_RE.findall(_strip_control_tokens(expected))}
+    if not actual_words or not expected_words:
+        return 0.0
+    return len(actual_words & expected_words) / len(expected_words)
+
+
+def _strip_control_tokens(text: str) -> str:
+    stripped = text
+    for token in extract_control_tokens(text):
+        stripped = stripped.replace(token, " ")
+    return stripped
 
 
 def _read_record(block: bytes, position: int) -> tuple[str, str, int] | None:

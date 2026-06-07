@@ -106,6 +106,49 @@ class IdxDatLanguagePatchTest(unittest.TestCase):
         self.assertIn("{S}Hello".encode("utf-16le"), patched)
         self.assertIn(b"\xCC\xDD", patched)
 
+    def test_patches_inferred_simplified_language_group(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "bilingual.json"
+            extracted = root / "extracted" / "BigFile_PC_exp"
+            output = root / "generated"
+            extracted.mkdir(parents=True)
+            source.write_text(
+                json.dumps(
+                    {
+                        "HELLO_KEY": "Hello here{B}这里有电脑",
+                        "BYE_KEY": "Problem found{B}发现问题",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (extracted / "0x00000000.dat").write_bytes(
+                _record("HELLO_KEY", "{S}Bonjour ici")
+                + _record("BYE_KEY", "{S}Probleme trouve")
+                + _record("HELLO_KEY", "{S}Hello here")
+                + _record("BYE_KEY", "{S}Problem found")
+                + _record("HELLO_KEY", "{S}這裡有電腦")
+                + _record("BYE_KEY", "{S}發現問題")
+                + _record("HELLO_KEY", "{S}这里有电脑")
+                + _record("BYE_KEY", "{S}发现问题")
+            )
+
+            result = patch_idx_dat_language_tree(
+                source=source,
+                extracted_dir=root / "extracted",
+                output_dir=output,
+                language="SCH",
+            )
+            patched = (output / "BigFile_PC_exp" / "0x00000000.dat").read_bytes()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.report.updated, 2)
+        self.assertEqual(result.report.target_entries, 2)
+        self.assertIn("{S}Hello here{B}这里有电脑".encode("utf-16le"), patched)
+        self.assertIn("{S}Problem found{B}发现问题".encode("utf-16le"), patched)
+        self.assertIn("{S}這裡有電腦".encode("utf-16le"), patched)
+        self.assertIn("{S}Hello here".encode("utf-16le"), patched)
+
 
 def _language_block(language: str, values: dict[str, str], gap: bytes = b"") -> bytes:
     block = b"\x01\x03\x00\x00\x00" + language.encode("ascii") + b"\x12\x00\x00\x00"
